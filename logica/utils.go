@@ -219,3 +219,28 @@ func convert(to NFT, from TempNFT, nodiSelected []string) NFT {
 
 	return to
 }
+
+// helpers
+func isHex(s string) bool {
+	if len(s)%2 == 1 {
+		return false
+	}
+	for _, c := range s {
+		switch {
+		case '0' <= c && c <= '9',
+			'a' <= c && c <= 'f',
+			'A' <= c && c <= 'F':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func HexFileNameFromName(nameBytes []byte) string {
+	// pad/truncate a 20 byte e poi hex
+	fixed := make([]byte, 20)
+	copy(fixed, nameBytes) // se nameBytes >20 viene troncato, se <20 viene padded con 0x00
+	return fmt.Sprintf("%x.json", fixed)
+}

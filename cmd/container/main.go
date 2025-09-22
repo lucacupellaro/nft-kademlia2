@@ -103,7 +103,6 @@ func main() {
 			} // safety
 
 			name := strings.TrimSpace(row[1])
-			//key := logica.NewIDFromToken(name, 20) // ID dal Name (come vuoi tu)
 
 			col := func(k int) string {
 				if k >= 0 && k < len(row) {
@@ -186,8 +185,6 @@ func main() {
 
 		TokenNodo = common.Sha1ID(nodeID)
 
-		//fmt.Printf("Sono il nodo %s, PID: %d\n", logica.DecodeID(TokenNodo), os.Getpid())
-
 		//---------Recuperlo la lista dei nodi chiedendola al Seeder-------------------------
 		nodes, err := logica.GetNodeListIDs("node1:8000", os.Getenv("NODE_ID"))
 
@@ -203,20 +200,13 @@ func main() {
 
 		dir = logica.BuildByteMappingSHA1(parts)
 
-		/*
-			var nodiTokenizati [][]byte
-			for i := 0; i < len(nodes); i++ {
-				nodiTokenizati = append(nodiTokenizati, logica.NewIDFromToken(nodes[i], 20))
-			}
-		*/
-
 		//--------------------Ogni container si trova i k bucket piu vicini e li salva nel proprio volume-------------------//
-
-		Bucket = logica.AssignNFTToNodes(TokenNodo, dir.IDs, 7)
+		BucketStruct := logica.ClosestNodesForNFTWithDir(TokenNodo, dir, 7)
+		for _, b := range BucketStruct {
+			Bucket = append(Bucket, b.SHA)
+		}
 
 		BucketSort = logica.RemoveAndSortMe(Bucket, TokenNodo)
-
-		//fmt.Printf("sto salvando il kbucket per il nodo,%s\n", logica.DecodeID(TokenNodo))
 
 		err2 := logica.SaveKBucket(nodeID, BucketSort, "/data/kbucket.json")
 

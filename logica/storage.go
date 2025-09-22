@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -46,6 +45,7 @@ type NFT struct {
 	AssignedNodesToken []string
 }
 
+// legge gli NFTS from CSV
 func ReadCsv2(path string) [][]string {
 
 	//fmt.Printf("file: %s\n", path)
@@ -107,7 +107,7 @@ type ByteMapping struct {
 	ByHex map[string]string // lookup: hex(ID) -> key (utile per log/JSON)
 }
 
-// BuildByteMappingSHA1: crea il mapping pulendo spazi ed eliminando duplicati.
+// BuildByteMappingSHA1: crea il mapping dei nodi id e dei loro ID SHA-1
 func BuildByteMappingSHA1(input []string) *ByteMapping {
 	seen := make(map[string]struct{}, len(input))
 	out := &ByteMapping{
@@ -145,7 +145,7 @@ type NodePick struct {
 	SHAHex string // esadecimale (40 char)
 }
 
-// key = SHA-1 (20B) dell'NFT, dir = rubrica nodi (key->SHA-1), k = quanti nodi vuoi
+// funzione che assegna i k nodi piu vicini all'nft/nodoId
 func ClosestNodesForNFTWithDir(key []byte, dir *ByteMapping, k int) []NodePick {
 	if dir == nil || len(key) == 0 || k <= 0 || len(dir.List) == 0 {
 		return nil
@@ -201,70 +201,6 @@ func ClosestNodesForNFTWithDir(key []byte, dir *ByteMapping, k int) []NodePick {
 			SHA:    idCopy,
 			SHAHex: hex.EncodeToString(idCopy),
 		}
-	}
-	return out
-}
-
-func AssignNFTToNodes(key []byte, nodes [][]byte, k int) [][]byte {
-	if key == nil || len(key) == 0 || len(nodes) == 0 || k <= 0 {
-		return nil
-	}
-	L := len(key)
-
-	// 1) Dedup + filtri (len==L, !=self), copia difensiva
-	uniq := make([][]byte, 0, len(nodes))
-	seen := make(map[string]struct{}, len(nodes))
-	self := string(key)
-
-	for _, nid := range nodes {
-		if nid == nil || len(nid) != L {
-			continue
-		}
-		s := string(nid) // ok con byte arbitrari
-		if s == self {
-			continue // niente self
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		buf := make([]byte, L)
-		copy(buf, nid)
-		uniq = append(uniq, buf)
-	}
-	if len(uniq) == 0 {
-		return nil
-	}
-	if k > len(uniq) {
-		k = len(uniq)
-	}
-
-	// 2) Prepara (id, dist=key XOR id)
-	type pair struct {
-		id   []byte
-		dist []byte
-	}
-	pairs := make([]pair, len(uniq))
-	for i, id := range uniq {
-		d := make([]byte, L)
-		for j := 0; j < L; j++ {
-			d[j] = key[j] ^ id[j]
-		}
-		pairs[i] = pair{id: id, dist: d}
-	}
-
-	// 3) Ordina per distanza XOR, tie-break su ID
-	sort.Slice(pairs, func(i, j int) bool {
-		if c := bytes.Compare(pairs[i].dist, pairs[j].dist); c != 0 {
-			return c < 0
-		}
-		return bytes.Compare(pairs[i].id, pairs[j].id) < 0
-	})
-
-	// 4) Primi k
-	out := make([][]byte, k)
-	for i := 0; i < k; i++ {
-		out[i] = pairs[i].id
 	}
 	return out
 }
@@ -395,6 +331,7 @@ func ResolveAddrForNode(nodeName string) (string, error) {
 	return fmt.Sprintf("localhost:%d", 8000+n), nil
 }
 
+// avvia il server gRPC
 func RunGRPCServer() error {
 	lis, err := net.Listen("tcp", ":8000")
 	if err != nil {
@@ -406,6 +343,7 @@ func RunGRPCServer() error {
 	return gs.Serve(lis) // BLOCCA
 }
 
+// evito di storare nft su nodi che non sono attivi
 func WaitReady(host string, timeout time.Duration) error {
 	addr := fmt.Sprintf("%s:8000", host)
 	deadline := time.Now().Add(timeout)
@@ -426,61 +364,4 @@ func WaitReady(host string, timeout time.Duration) error {
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-}
-
-// Su HOST: elenca i file in ./data/<nodeID>
-// (se la esegui DENTRO al container, usa base := "/data" e ignora nodeID)
-func ListNodeVolumeFiles(nodeID string) ([]string, error) {
-	base := "./data" // nel container metti "/data"
-	dir := filepath.Join(base, nodeID)
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			files = append(files, e.Name())
-		}
-	}
-	sort.Strings(files)
-	return files, nil
-}
-
-func HexFileNameFromName(nameBytes []byte) string {
-	// pad/truncate a 20 byte e poi hex
-	fixed := make([]byte, 20)
-	copy(fixed, nameBytes) // se nameBytes >20 viene troncato, se <20 viene padded con 0x00
-	return fmt.Sprintf("%x.json", fixed)
-}
-
-// helpers
-func isHex(s string) bool {
-	if len(s)%2 == 1 {
-		return false
-	}
-	for _, c := range s {
-		switch {
-		case '0' <= c && c <= '9',
-			'a' <= c && c <= 'f',
-			'A' <= c && c <= 'F':
-			continue
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func RemoveNode1(nodi *[]string) {
-
-	out := (*nodi)[:0]
-	for _, s := range *nodi {
-		if s != "node1" {
-			out = append(out, s)
-		}
-	}
-	*nodi = out
 }
