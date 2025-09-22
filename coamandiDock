@@ -1,0 +1,22 @@
+# ferma e rimuovi tutti i container
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null || true
+sudo docker rm -f $(sudo docker ps -aq) 2>/dev/null || true
+
+# rimuovi tutti i volumi
+sudo docker volume rm $(sudo docker volume ls -q) 2>/dev/null || true
+
+# rimuovi reti orfane
+sudo docker network prune -f
+
+# rimuovi tutte le immagini e la build cache
+sudo docker image prune -a -f
+sudo docker builder prune -a -f
+
+# pulizia totale in un colpo (include volumi)
+sudo docker system prune -a --volumes -f
+
+
+
+//elimniare su bind mount ma solo sulla cartelal deoi container, sudo find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+
+//  docker compose logs -f node6

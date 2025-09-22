@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package kad;
+
+
+option go_package = "proto/kad;kad";
+
+
+message Node {
+  string id   = 1;
+  string host = 2;
+  int32  port = 3;
+}
+
+message Key { bytes key = 1; }
+
+message NFTValue { bytes bytes = 1; }
+
+message StoreReq {
+  Node     from     = 1;
+  Key      key      = 2;
+  NFTValue value    = 3;
+  int32    ttl_secs = 4; // opzionale
+}
+
+message StoreRes { bool ok = 1; }
+
+message GetNodeListReq {
+  string requester_id = 1;  
+}
+
+message GetNodeListRes {
+  repeated Node nodes = 1;  // qui specifichi che è una lista di Node
+}
+
+message LookupNFTReq {
+  string from_id = 1;  // id del nodo che fa la richiesta (per logging)
+  Key    key     = 2;  // chiave NFT (20 byte come fai tu)
+}
+
+message LookupNFTRes {
+  bool           found   = 1;           // true se presente su questo nodo
+  Node           holder  = 2;           // questo nodo (se found=true)
+  NFTValue       value   = 3;           // il contenuto (json bytes) se found=true
+  repeated Node  nearest = 4;           // suggerimento nodi più vicini se non trovato
+}
+
+
+message GetKBucketReq {
+    string requester_id = 1;  // opzionale, per logging o debugging
+}
+
+message GetKBucketResp {
+    repeated Node nodes = 1; // la lista dei nodi conosciuti
+}
+
+
+message PingReq {
+  Node from = 1;        // chi sta pingando (X)
+}
+
+message PingRes {
+  bool   ok      = 1;   // true = sono vivo
+  string node_id = 2;   // mio id (Y)
+  int64  unix_ms = 3;   // timestamp server
+}
+
+message UpdateBucketReq { Node contact = 1; } 
+message UpdateBucketRes { bool ok = 1; }
+
+
+message RebalanceReq {
+  string target_id = 1;       // id del nodo che deve ribilanciarsi
+  repeated Node nodes = 2;    // lista nodi attivi
+  int32 k = 3;                // (opzionale) fattore di replica
+}
+
+message RebalanceRes {
+  int32 moved = 1;            // quanti NFT spostati
+  int32 kept  = 2;            // quanti NFT mantenuti
+  string message = 3;         // log di riepilogo
+}
+
+
+// ---- Servizio ----
+service Kademlia {
+  rpc Store (StoreReq) returns (StoreRes);
+  rpc GetNodeList (GetNodeListReq) returns (GetNodeListRes);
+  rpc LookupNFT   (LookupNFTReq)   returns (LookupNFTRes);
+  rpc GetKBucket(GetKBucketReq) returns (GetKBucketResp);
+  rpc Ping (PingReq) returns (PingRes);
+  rpc UpdateBucket(UpdateBucketReq) returns (UpdateBucketRes); 
+  rpc Rebalance(RebalanceReq) returns (RebalanceRes);
+
+}

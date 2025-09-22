@@ -1,0 +1,12 @@
+*.log
+*.tmp
+.DS_Store
+node_modules/
+vendor/
+bin/
+coverage/
+.env
+dist/
+build/
+
+ec2.pem
