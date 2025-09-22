@@ -13,6 +13,27 @@ import (
 	"strings"
 )
 
+type TempNFT struct {
+	TokenID         string `json:"token_id"`
+	Name            string `json:"name"`
+	Index           string `json:"index"`
+	Volume          string `json:"volume"`
+	VolumeUSD       string `json:"volume_usd"`
+	MarketCap       string `json:"market_cap"`
+	MarketCapUSD    string `json:"market_cap_usd"`
+	Sales           string `json:"sales"`
+	FloorPrice      string `json:"floor_price"`
+	FloorPriceUSD   string `json:"floor_price_usd"`
+	AveragePrice    string `json:"average_price"`
+	AveragePriceUSD string `json:"average_price_usd"`
+	Owners          string `json:"owners"`
+	Assets          string `json:"assets"`
+	OwnerAssetRatio string `json:"owner_asset_ratio"`
+	Category        string `json:"category"`
+	Website         string `json:"website"`
+	Logo            string `json:"logo"`
+}
+
 type byteMappingFile struct {
 	List   []string `json:"list"`
 	IdsHex []string `json:"ids_hex"`
@@ -157,4 +178,44 @@ func isPortFree(port string) bool {
 	}
 	_ = ln.Close()
 	return true
+}
+
+// helper: normalizza host/porta (porta 0 o vuota -> 8000)
+func sanitizeHostPort(host string, port int) (string, int) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		host = "localhost"
+	}
+	if port == 0 {
+		port = 8000
+	}
+	return host, port
+}
+
+func convert(to NFT, from TempNFT, nodiSelected []string) NFT {
+
+	fmt.Printf("ID NFT: %s\n", from.TokenID)
+	tokenID, _ := hex.DecodeString(from.TokenID)
+
+	to.TokenID = tokenID
+	to.Name = from.Name
+	to.Index = from.Index
+	to.Volume = from.Volume
+	to.Volume_USD = from.VolumeUSD
+	to.Market_Cap = from.MarketCap
+	to.Market_Cap_USD = from.MarketCapUSD
+	to.Sales = from.Sales
+	to.Floor_Price = from.FloorPrice
+	to.Floor_Price_USD = from.FloorPriceUSD
+	to.Average_Price = from.AveragePrice
+	to.Average_Price_USD = from.AveragePriceUSD
+	to.Owners = from.Owners
+	to.Assets = from.Assets
+	to.Owner_Asset_Ratio = from.OwnerAssetRatio
+	to.Category = from.Category
+	to.Website = from.Website
+	to.Logo = from.Logo
+	to.AssignedNodesToken = nodiSelected
+
+	return to
 }

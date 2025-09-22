@@ -245,7 +245,7 @@ func main() {
 		//targetID := logica.Sha1ID(targetAddr) // ID SHA1 del nodo4
 		activeNodes := nodi // es: ["node1:8000", "node2:8000", ...]
 
-		err = logica.RebalanceNode(targetAddr, "node6", activeNodes, 2)
+		err = ui.RebalanceNode(targetAddr, "node6", activeNodes, 2)
 		if err != nil {
 			log.Fatal(err)
 		}

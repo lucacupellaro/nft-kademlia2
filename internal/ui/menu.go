@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 
 	"fmt"
-	"kademlia-nft/logica"
+	"kademlia-nft/common"
 	"math/big"
 	"os"
 	"os/exec"
@@ -148,7 +148,7 @@ func LookupNFTOnNodeByName(startNode string, str []Pair, nftName string, maxHops
 		maxHops = 15
 	}
 
-	nftID20 := logica.Sha1ID(nftName)
+	nftID20 := common.Sha1ID(nftName)
 	visited := make(map[string]bool)
 	current := startNode
 
@@ -276,7 +276,7 @@ func Reverse2(nodes []string) ([]Pair, error) {
 	out := make([]Pair, 0, len(nodes))
 	for _, n := range nodes {
 
-		idHex := hex.EncodeToString(logica.Sha1ID(n))
+		idHex := hex.EncodeToString(common.Sha1ID(n))
 
 		out = append(out, Pair{esa: idHex, hash: n})
 	}
@@ -290,7 +290,7 @@ func sceltaNodoPiuVicino(nftID20 []byte, nodiVicini []string) (string, error) {
 
 	for _, idStr := range nodiVicini {
 
-		nidBytes := logica.Sha1ID(idStr)
+		nidBytes := common.Sha1ID(idStr)
 
 		distBytes := make([]byte, len(nftID20))
 		for i := range nftID20 {
