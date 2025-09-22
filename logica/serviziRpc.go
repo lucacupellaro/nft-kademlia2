@@ -470,3 +470,21 @@ func (s *KademliaServer) Rebalance(ctx context.Context, req *pb.RebalanceReq) (*
 		Message: msg,
 	}, nil
 }
+
+func (s *KademliaServer) GetNodeList(ctx context.Context, req *pb.GetNodeListReq) (*pb.GetNodeListRes, error) {
+	raw := os.Getenv("NODES")
+	if raw == "" {
+		log.Println("WARN: NODES env vuota nel seeder")
+		return &pb.GetNodeListRes{}, nil
+	}
+	parts := strings.Split(raw, ",")
+	out := &pb.GetNodeListRes{Nodes: make([]*pb.Node, 0, len(parts))}
+	for _, name := range parts {
+		out.Nodes = append(out.Nodes, &pb.Node{
+			Id:   name,
+			Host: name,
+			Port: 8000,
+		})
+	}
+	return out, nil
+}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"kademlia-nft/common"
 	"kademlia-nft/internal/ui"
 	"kademlia-nft/logica"
 	"log"
@@ -147,7 +148,7 @@ func main() {
 
 		dir = logica.BuildByteMappingSHA1(nodi)
 
-		key := logica.Sha1ID(line)
+		key := common.Sha1ID(line)
 
 		assigned := logica.ClosestNodesForNFTWithDir(key, dir, 2)
 		var nodiSelected []string

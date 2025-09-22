@@ -70,43 +70,6 @@ func ReadCsv2(path string) [][]string {
 	return records
 }
 
-func NewIDFromToken(tokenID string, size int) []byte {
-	b := []byte(tokenID)
-	if len(b) > size {
-		out := make([]byte, size)
-		copy(out, b[:size])
-		return out
-	}
-	padded := make([]byte, size)
-	copy(padded, b)
-	return padded
-}
-
-func Sha1ID(tokenID string) []byte {
-	s := sha1.Sum([]byte(tokenID)) // [20]byte
-	b := make([]byte, sha1.Size)
-	copy(b, s[:])
-	return b // esattamente 20 byte
-}
-
-func DecodeID(b []byte) string {
-	return string(bytes.TrimRight(b, "\x00"))
-}
-
-func XOR(a, b []byte) ([]byte, error) {
-	if a == nil || b == nil {
-		return nil, fmt.Errorf("nil input")
-	}
-	if len(a) != len(b) {
-		return nil, fmt.Errorf("length mismatch: %d vs %d", len(a), len(b))
-	}
-	out := make([]byte, len(a))
-	for i := range a {
-		out[i] = a[i] ^ b[i]
-	}
-	return out, nil
-}
-
 // confronto lessicografico: true se a < b
 func LessThan(a, b []byte) bool {
 	n := len(a)
@@ -123,16 +86,6 @@ func LessThan(a, b []byte) bool {
 	}
 	// se prefissi uguali, quello più corto è “minore”
 	return len(a) < len(b)
-}
-
-// Generate a list of IDs from a list of tokens or Nodes
-func GenerateBytesOfAllNfts(list []string) [][]byte {
-	ids := make([][]byte, len(list))
-	for i, s := range list {
-		ids[i] = NewIDFromToken(s, 20) // 20 bytes = 160 bit
-
-	}
-	return ids
 }
 
 func GenerateBytesOfAllNftsSHA1(list []string) [][]byte {
@@ -316,36 +269,6 @@ func AssignNFTToNodes(key []byte, nodes [][]byte, k int) [][]byte {
 	return out
 }
 
-/*
-// restituisce i k nodeID più vicini alla chiave (distanza XOR, ordinata crescente)
-func AssignNFTToNodes(key []byte, nodes [][]byte, k int) [][]byte {
-	if k <= 0 || len(nodes) == 0 {
-		return nil
-	}
-	if k > len(nodes) {
-		k = len(nodes)
-	}
-
-	type pair struct {
-		id   []byte
-		dist []byte
-	}
-	pairs := make([]pair, len(nodes))
-	for i, nid := range nodes {
-		pairs[i] = pair{id: nid, dist: XOR(key, nid)}
-	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return LessThan(pairs[i].dist, pairs[j].dist)
-	})
-
-	out := make([][]byte, k)
-	for i := 0; i < k; i++ {
-		out[i] = pairs[i].id
-	}
-	return out
-}
-*/
 // StoreNFTToNodes invia lo stesso NFT a tutti i nodi indicati.
 // Ritorna nil se TUTTE le store vanno a buon fine; altrimenti un error descrittivo.
 func StoreNFTToNodes(nft NFT, tokenID []byte, name string, nodes []string, ttlSecs int32) error {
@@ -471,8 +394,6 @@ func ResolveAddrForNode(nodeName string) (string, error) {
 	}
 	return fmt.Sprintf("localhost:%d", 8000+n), nil
 }
-
-// ===== Server RPC =====
 
 func RunGRPCServer() error {
 	lis, err := net.Listen("tcp", ":8000")

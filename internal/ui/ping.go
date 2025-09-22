@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
-	"kademlia-nft/logica"
+	"kademlia-nft/common"
 	pb "kademlia-nft/proto/kad"
 	"math/big"
 	"strings"
@@ -16,7 +16,7 @@ import (
 //AGGIORNO IL KBUCKET DEL NODO CHIAMATO
 
 func PingNode(startNode, targetNode string, pairs []Pair) {
-	targetID := logica.Sha1ID(targetNode)
+	targetID := common.Sha1ID(targetNode)
 
 	hex2id := make(map[string]string, len(pairs))
 	for _, p := range pairs {
@@ -54,7 +54,7 @@ func PingNode(startNode, targetNode string, pairs []Pair) {
 			if visited[id] {
 				continue
 			}
-			d := xorDist(targetID, logica.Sha1ID(id))
+			d := common.XorDist(targetID, common.Sha1ID(id))
 			if next == "" || d.Cmp(nextD) < 0 {
 				next, nextD = id, d
 			}

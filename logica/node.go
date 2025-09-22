@@ -5,12 +5,11 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"kademlia-nft/common"
 	pb "kademlia-nft/proto/kad"
 	"log"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -61,8 +60,8 @@ func RemoveAndSortMe(bucket [][]byte, selfId []byte) [][]byte {
 	sort.Slice(bucket, func(i, j int) bool {
 		var err1 error
 		var err2 error
-		distI, err1 := XOR(selfId, bucket[i])
-		distJ, err2 := XOR(selfId, bucket[j])
+		distI, err1 := common.XOR(selfId, bucket[i])
+		distJ, err2 := common.XOR(selfId, bucket[j])
 		if err1 != nil || err2 != nil {
 			log.Printf("WARN: errore calcolo distanza XOR: %v, %v", err1, err2)
 			return false
@@ -76,24 +75,6 @@ func RemoveAndSortMe(bucket [][]byte, selfId []byte) [][]byte {
 
 type KademliaServer struct {
 	pb.UnimplementedKademliaServer
-}
-
-func (s *KademliaServer) GetNodeList(ctx context.Context, req *pb.GetNodeListReq) (*pb.GetNodeListRes, error) {
-	raw := os.Getenv("NODES")
-	if raw == "" {
-		log.Println("WARN: NODES env vuota nel seeder")
-		return &pb.GetNodeListRes{}, nil
-	}
-	parts := strings.Split(raw, ",")
-	out := &pb.GetNodeListRes{Nodes: make([]*pb.Node, 0, len(parts))}
-	for _, name := range parts {
-		out.Nodes = append(out.Nodes, &pb.Node{
-			Id:   name,
-			Host: name,
-			Port: 8000,
-		})
-	}
-	return out, nil
 }
 
 func GetNodeListIDs(seederAddr, requesterID string) ([]string, error) {
@@ -120,52 +101,6 @@ func GetNodeListIDs(seederAddr, requesterID string) ([]string, error) {
 		ids = append(ids, n.Id)
 	}
 	return ids, nil
-}
-
-func resolveStartHostPort(name string) (string, error) {
-	name = strings.TrimSpace(strings.ToLower(name))
-	// supporta sia "node3" sia "nodo3"
-	if strings.HasPrefix(name, "nodo") {
-		name = "node" + name[len("nodo"):]
-	}
-	var n int
-	if _, err := fmt.Sscanf(name, "node%d", &n); err != nil || n < 1 || n > 11 {
-		return "", fmt.Errorf("nome nodo non valido: %q", name)
-	}
-	// La CLI corre su HOST → usa la porta mappata localhost:800N
-	return fmt.Sprintf("localhost:%d", 8000+n), nil
-}
-
-// Carica la mappa hex → nodeID da byte_mapping.json prodotto in precedenza
-// Formato atteso: { "list": ["node2","node3",...], "ids_hex": ["<sha1hex(node2)>", ...] }
-func loadHexToNodeIDMap(path string) (map[string]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var f struct {
-		List   []string `json:"list"`
-		IdsHex []string `json:"ids_hex"`
-	}
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, err
-	}
-	m := make(map[string]string, len(f.List))
-	for i := range f.List {
-		hx := strings.ToLower(strings.TrimSpace(f.IdsHex[i]))
-		id := strings.TrimSpace(f.List[i])
-		if hx != "" && id != "" {
-			m[hx] = id
-		}
-	}
-	return m, nil
-}
-
-// ---------------------
-// calcola l’hex da "nodeX" con la tua stessa regola dei 20 byte
-func idHexFromNodeID(nodeID string) string {
-	b := NewIDFromToken(nodeID, 20)
-	return hex.EncodeToString(b)
 }
 
 const (
@@ -214,7 +149,8 @@ func touchContactHex(kb *kbucketFile, hexID string) {
 }
 
 func TouchContact(nodeID string) error {
-	hexID := idHexFromNodeID(nodeID)
+	raw := common.Sha1ID(nodeID)
+	hexID := hex.EncodeToString(raw)
 	kb, err := loadKBucket(kBucketPath)
 	if err != nil {
 		return err

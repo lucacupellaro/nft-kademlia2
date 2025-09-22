@@ -173,11 +173,3 @@ func RPCGetKBucket(nodeAddr string) ([]string, error) {
 
 	return res, nil
 }
-
-func xorDist(a20 []byte, b20 []byte) *big.Int {
-	nb := make([]byte, len(a20))
-	for i := range a20 {
-		nb[i] = a20[i] ^ b20[i]
-	}
-	return new(big.Int).SetBytes(nb)
-}

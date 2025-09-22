@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"kademlia-nft/common"
 	"kademlia-nft/logica"
 	"log"
 	"os"
@@ -54,7 +55,6 @@ func main() {
 
 		fmt.Printf("NFT 0z %s\n", colName[0])
 
-		//prev listNFTId := logica.GenerateBytesOfAllNfts(colName)
 		listNFTId := logica.GenerateBytesOfAllNftsSHA1(colName)
 		fmt.Printf("Primo NFT: %s\n", colName[0])
 		fmt.Printf("Primo ID  : %x\n", listNFTId[0])
@@ -184,7 +184,7 @@ func main() {
 			nodeID = "default"
 		}
 
-		TokenNodo = logica.Sha1ID(nodeID)
+		TokenNodo = common.Sha1ID(nodeID)
 
 		//fmt.Printf("Sono il nodo %s, PID: %d\n", logica.DecodeID(TokenNodo), os.Getpid())
 
