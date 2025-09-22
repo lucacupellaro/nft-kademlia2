@@ -182,7 +182,7 @@ func main() {
 		nodiii = append(nodiii, nfts[0].AssignedNodesToken[0])
 		nodiii = append(nodiii, nfts[0].AssignedNodesToken[1])
 
-		if err := logica.StoreNFTToNodes2(nfts[0], nfts[0].TokenID, nfts[0].Name, nodiii, 24*3600); err != nil {
+		if err := ui.StoreNFTToNodes2(nfts[0], nfts[0].TokenID, nfts[0].Name, nodiii, 24*3600); err != nil {
 			fmt.Println("Errore:", err)
 
 		}
