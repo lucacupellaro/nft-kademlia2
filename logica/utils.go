@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -243,4 +244,27 @@ func HexFileNameFromName(nameBytes []byte) string {
 	fixed := make([]byte, 20)
 	copy(fixed, nameBytes) // se nameBytes >20 viene troncato, se <20 viene padded con 0x00
 	return fmt.Sprintf("%x.json", fixed)
+}
+
+func RemoveNode1(nodi *[]string) {
+
+	out := (*nodi)[:0]
+	for _, s := range *nodi {
+		if s != "node1" {
+			out = append(out, s)
+		}
+	}
+	*nodi = out
+}
+
+func RequireIntEnv(key string) int {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		log.Fatalf("Manca la variabile d'ambiente %s (mettila nel .env)", key)
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf("%s=%q non è un intero valido", key, v)
+	}
+	return i
 }

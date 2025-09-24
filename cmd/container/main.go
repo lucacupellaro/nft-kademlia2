@@ -36,6 +36,10 @@ func main() {
 
 	if isSeeder {
 
+		repFactor := logica.RequireIntEnv("REPLICATION_FACTOR")
+
+		fmt.Printf("Replication factor: %d\n", repFactor)
+
 		fmt.Printf("sono il seeder,\nReading CSV file...\n")
 
 		csvAll = logica.ReadCsv2("csv/NFT_Top_Collections.csv")
@@ -89,7 +93,7 @@ func main() {
 		}
 		fmt.Printf("✅ File salvato in: %s\n", out)
 
-		//fissato nft quindi per ogni nft , creo unafunzione che per ogni nft scorre tutti e gli id dei nodi e li assegna ai 2 piu vicini)
+		// per ogni nft , creo unafunzione che per ogni nft scorre tutti e gli id dei nodi e li assegna ai 2 piu vicini)
 
 		fmt.Println("Assegnazione dei k nodeID più vicini agli NFT...")
 
@@ -111,9 +115,13 @@ func main() {
 				return ""
 			}
 
-			assigned := logica.ClosestNodesForNFTWithDir(listNFTId[i], dir, 2)
+			assigned := logica.ClosestNodesForNFTWithDir(listNFTId[i], dir, repFactor)
 			var nodiSelected []string
-			nodiSelected = append(nodiSelected, assigned[0].Key, assigned[1].Key)
+
+			for i := 0; i < repFactor; i++ {
+				nodiSelected = append(nodiSelected, assigned[i].Key)
+			}
+			//nodiSelected = append(nodiSelected, assigned[0].Key, assigned[1].Key)
 
 			nfts = append(nfts, logica.NFT{
 				Index:             col(0),
@@ -153,15 +161,16 @@ func main() {
 
 		for j := 0; j < len(nfts); j++ {
 			var nodi []string
-			nodi = append(nodi, nfts[j].AssignedNodesToken[0])
-			nodi = append(nodi, nfts[j].AssignedNodesToken[1])
+			for i := 0; i < repFactor; i++ {
+				nodi = append(nodi, nfts[j].AssignedNodesToken[i])
+			}
+			//nodi = append(nodi, nfts[j].AssignedNodesToken[0])
+			//nodi = append(nodi, nfts[j].AssignedNodesToken[1])
 
 			if err := logica.StoreNFTToNodes(nfts[j], nfts[j].TokenID, nfts[j].Name, nodi, 24*3600); err != nil {
 				fmt.Println("Errore:", err)
 				continue
 			}
-
-			//fmt.Printf("Salvati NFT numero: %d\n", j)
 
 			nodi = nil
 
@@ -170,6 +179,9 @@ func main() {
 		select {} // blocca per sempre
 
 	} else {
+
+		bucket := logica.RequireIntEnv("BUCKET_SIZE")
+		fmt.Printf("Bucket size: %d\n", bucket)
 
 		var nodes []string
 		var TokenNodo []byte
@@ -186,11 +198,8 @@ func main() {
 		TokenNodo = common.Sha1ID(nodeID)
 
 		//---------Recuperlo la lista dei nodi chiedendola al Seeder-------------------------
-		nodes, err := logica.GetNodeListIDs("node1:8000", os.Getenv("NODE_ID"))
 
-		if err != nil {
-			log.Fatalf("Errore recupero nodi dal seeder: %v", err)
-		}
+		nodes, err := logica.GetNodeListIDs("node1:8000", os.Getenv("NODE_ID"))
 
 		s := strings.Join(nodes, ",")
 
@@ -201,7 +210,7 @@ func main() {
 		dir = logica.BuildByteMappingSHA1(parts)
 
 		//--------------------Ogni container si trova i k bucket piu vicini e li salva nel proprio volume-------------------//
-		BucketStruct := logica.ClosestNodesForNFTWithDir(TokenNodo, dir, 7)
+		BucketStruct := logica.ClosestNodesForNFTWithDir(TokenNodo, dir, bucket)
 		for _, b := range BucketStruct {
 			Bucket = append(Bucket, b.SHA)
 		}
