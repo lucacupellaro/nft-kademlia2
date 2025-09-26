@@ -81,29 +81,26 @@ func main() {
 			fmt.Println(" -", n)
 		}
 
-		/*
+		fmt.Println("Da quale nodo vuoi far partire la simulazione?")
+		fmt.Println("Per selezionare un nodo, usa il comando 'use <nome-nodo>'")
+		nodoScelto := bufio.NewReader(os.Stdin)
+		line, _ := nodoScelto.ReadString('\n')
+		line = strings.TrimSpace(line)
 
-			fmt.Println("Da quale nodo vuoi far partire la simulazione?")
-			fmt.Println("Per selezionare un nodo, usa il comando 'use <nome-nodo>'")
-			nodoScelto := bufio.NewReader(os.Stdin)
-			line, _ := nodoScelto.ReadString('\n')
-			line = strings.TrimSpace(line)
+		fmt.Println("Hai scelto il nodo:", line)
 
-			fmt.Println("Hai scelto il nodo:", line)
+		fmt.Println("Quale Nft vuoi cercare?")
+		nftScelto := bufio.NewReader(os.Stdin)
+		line1, _ := nftScelto.ReadString('\n')
+		line1 = strings.TrimSpace(line1)
 
-			fmt.Println("Quale Nft vuoi cercare?")
-			nftScelto := bufio.NewReader(os.Stdin)
-			line1, _ := nftScelto.ReadString('\n')
-			line1 = strings.TrimSpace(line1)
+		fmt.Println("Hai scelto il NFT:", line1)
 
-			fmt.Println("Hai scelto il NFT:", line1)
-
-			//fmt.Printf("%x", key)
-		*/
+		//fmt.Printf("%x", key)
 
 		//------------------------Inizia la ricerca dell'NFT-------------------------------------------//
-		node := "nodo3"
-		name := "Lift-off Pass"
+		//node := "nodo3"
+		//name := "Lift-off Pass"
 
 		nodii, err := ui.ListActiveComposeServices("kademlia-nft")
 		if err != nil {
@@ -117,7 +114,7 @@ func main() {
 		}
 		//fmt.Printf("Nodi: %v\n", out)
 
-		if err := ui.LookupNFTOnNodeByName(node, out, name, 30); err != nil {
+		if err := ui.LookupNFTOnNodeByName(line, out, line1, 30); err != nil {
 			fmt.Println("Errore:", err)
 		}
 

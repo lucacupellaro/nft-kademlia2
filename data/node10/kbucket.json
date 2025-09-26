@@ -1,11 +1,5 @@
 {
   "node_id": "node10",
-  "bucket_hex": [
-    "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
-    "0785284586ef5810b80560319ef24968e897f7ce",
-    "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
-    "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
-    "c03e55d15602a33922858e97664ea33f368ef5de"
-  ],
-  "saved_at": "2025-09-25T06:59:28Z"
+  "bucket_hex": [],
+  "saved_at": "2025-09-26T08:10:43Z"
 }

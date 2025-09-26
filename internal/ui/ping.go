@@ -20,8 +20,8 @@ func PingNode(startNode, targetNode string, pairs []Pair) {
 
 	hex2id := make(map[string]string, len(pairs))
 	for _, p := range pairs {
-		h := strings.ToLower(strings.TrimSpace(p.esa))
-		id := strings.TrimSpace(p.hash)
+		h := strings.ToLower(strings.TrimSpace(p.esaSha1))
+		id := strings.TrimSpace(p.name)
 		if h != "" && id != "" {
 			hex2id[h] = id
 		}
@@ -141,7 +141,7 @@ func looksLikeNodeID(s string) bool {
 
 func SendPing(fromID, targetName string) error {
 
-	addr, err := resolveStartHostPort(targetName) // es: "localhost:8004"
+	addr, err := ResolveStartHostPort(targetName) // es: "localhost:8004"
 	if err != nil {
 		return err
 	}

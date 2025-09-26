@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
+	"regexp"
+	"strconv"
 
 	pb "kademlia-nft/proto/kad"
 
@@ -78,7 +80,31 @@ Benvenuto! Seleziona un'operazione:
 	}
 }
 
-func resolveStartHostPort(name string) (string, error) {
+var reNode = regexp.MustCompile(`^node(\d+)$`)
+
+func ResolveStartHostPort(name string) (string, error) {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if strings.HasPrefix(name, "nodo") { // supporto "nodoX"
+		name = "node" + name[len("nodo"):]
+	}
+	m := reNode.FindStringSubmatch(name)
+	if m == nil {
+		return "", fmt.Errorf("nome nodo non valido: %q", name)
+	}
+	n, _ := strconv.Atoi(m[1])
+
+	// Se vuoi, vincola a un massimo N letto da .env; altrimenti niente upper bound:
+	if n < 1 {
+		return "", fmt.Errorf("indice nodo non valido: %d", n)
+	}
+
+	// Fuori da Docker:
+	return fmt.Sprintf("localhost:%d", 8000+n), nil
+	// Dentro rete docker: return fmt.Sprintf("%s:%d", name, 8000), nil
+}
+
+/*
+func ResolveStartHostPort(name string) (string, error) {
 	name = strings.TrimSpace(strings.ToLower(name))
 	// supporta sia "node3" sia "nodo3"
 	if strings.HasPrefix(name, "nodo") {
@@ -91,27 +117,27 @@ func resolveStartHostPort(name string) (string, error) {
 
 	return fmt.Sprintf("localhost:%d", 8000+n), nil
 }
+*/
 
 type Pair struct {
-	esa  string
-	hash string
+	esaSha1 string //esAdecimale(SHA1(NODOX))
+	name    string //nome del nodo (nodeX )
 }
 
 func Reverse2(nodes []string) ([]Pair, error) {
-	//recupero dal file nodi e hash
 
 	out := make([]Pair, 0, len(nodes))
 	for _, n := range nodes {
 
 		idHex := hex.EncodeToString(common.Sha1ID(n))
 
-		out = append(out, Pair{esa: idHex, hash: n})
+		out = append(out, Pair{esaSha1: idHex, name: n})
 	}
 	return out, nil
 }
 
 // sceltaNodoPiuVicino: XOR distance minima tra nftID20 e ogni nodo (ID a 20 byte).
-func sceltaNodoPiuVicino(nftID20 []byte, nodiVicini []string) (string, error) {
+func SceltaNodoPiuVicino(nftID20 []byte, nodiVicini []string) (string, error) {
 	var bestNode string
 	var bestDist *big.Int
 
@@ -139,7 +165,7 @@ func sceltaNodoPiuVicino(nftID20 []byte, nodiVicini []string) (string, error) {
 
 func RPCGetKBucket(nodeAddr string) ([]string, error) {
 
-	add, err := resolveStartHostPort(nodeAddr)
+	add, err := ResolveStartHostPort(nodeAddr)
 	fmt.Printf("Risolvo %s in %s\n", nodeAddr, add)
 	fmt.Printf("🔍 Recupero KBucket di %s\n", add)
 
