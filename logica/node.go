@@ -25,7 +25,7 @@ type KBucketFile struct {
 
 // SaveKBucket salva il bucket del nodo su file JSON
 func SaveKBucket(nodeID string, bucket [][]byte, path string) error {
-	// converte ogni []byte in stringa hex
+
 	bucketHex := make([]string, len(bucket))
 	for i, b := range bucket {
 		bucketHex[i] = hex.EncodeToString(b)

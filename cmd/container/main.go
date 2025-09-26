@@ -180,48 +180,99 @@ func main() {
 
 	} else {
 
-		bucket := logica.RequireIntEnv("BUCKET_SIZE")
-		fmt.Printf("Bucket size: %d\n", bucket)
+		//------------------- Bootstrap K-Bucket robusto -------------------//
 
-		var nodes []string
-		var TokenNodo []byte
-		var Bucket [][]byte
-		var BucketSort [][]byte
-
-		//-------------------I container si mettono in ascolto qui-------------------//
-
-		nodeID := os.Getenv("NODE_ID")
-		if nodeID == "" {
-			nodeID = "default"
+		dataDir := "/data"
+		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+			log.Fatalf("Impossibile creare %s: %v", dataDir, err)
 		}
 
-		TokenNodo = common.Sha1ID(nodeID)
+		nodeID := strings.TrimSpace(os.Getenv("NODE_ID"))
+		if nodeID == "" {
+			log.Fatalf("NODE_ID non impostato")
+		}
+		tokenNodo := common.Sha1ID(nodeID)
 
-		//---------Recuperlo la lista dei nodi chiedendola al Seeder-------------------------
+		bucketSize := logica.RequireIntEnv("BUCKET_SIZE")
+		if bucketSize <= 0 {
+			bucketSize = 5
+		}
+		fmt.Printf("Bucket size: %d\n", bucketSize)
 
-		nodes, err := logica.GetNodeListIDs("node1:8000", os.Getenv("NODE_ID"))
-
-		s := strings.Join(nodes, ",")
+		// retry: aspetta che il seeder sia pronto e che la lista nodi sia “sufficiente”
 
 		var dir *logica.ByteMapping
+		retryMax := 60 // ~60 secondi
+		for attempt := 1; attempt <= retryMax; attempt++ {
+			nl, err := logica.GetNodeListIDs("node1:8000", nodeID)
+			if err != nil {
+				log.Printf("[bootstrap %s] get node list: tentativo %d/%d: %v", nodeID, attempt, retryMax, err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-		parts := strings.Split(s, ",")
+			// filtra, normalizza, de-duplica
+			seen := make(map[string]bool)
+			clean := make([]string, 0, len(nl))
+			for _, n := range nl {
+				n = strings.TrimSpace(n)
+				if n == "" || n == nodeID || seen[n] {
+					continue
+				}
+				seen[n] = true
+				clean = append(clean, n)
+			}
 
-		dir = logica.BuildByteMappingSHA1(parts)
+			if len(clean) == 0 {
+				log.Printf("[bootstrap %s] lista nodi vuota (tentativo %d/%d) — retry", nodeID, attempt, retryMax)
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-		//--------------------Ogni container si trova i k bucket piu vicini e li salva nel proprio volume-------------------//
-		BucketStruct := logica.ClosestNodesForNFTWithDir(TokenNodo, dir, bucket)
-		for _, b := range BucketStruct {
-			Bucket = append(Bucket, b.SHA)
+			dir = logica.BuildByteMappingSHA1(clean)
+			if dir == nil || len(dir.List) == 0 {
+				log.Printf("[bootstrap %s] mapping nullo (tentativo %d/%d) — retry", nodeID, attempt, retryMax)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// ok, abbiamo una directory sensata
+			nodes := clean
+			fmt.Printf("[bootstrap %s] lista nodi ottenuta (%d nodi) dopo %d tentativi\n", nodeID, len(nodes), attempt)
+			break
+		}
+		if dir == nil {
+			log.Fatalf("[bootstrap %s] impossibile ottenere directory nodi dopo %d tentativi", nodeID, retryMax)
 		}
 
-		BucketSort = logica.RemoveAndSortMe(Bucket, TokenNodo)
-
-		err2 := logica.SaveKBucket(nodeID, BucketSort, "/data/kbucket.json")
-
-		if err2 != nil {
-			log.Fatalf("Errore salvataggio K-bucket: %v", err)
+		// calcola i più vicini (cap su bucketSize e nodi disponibili)
+		if bucketSize > len(dir.List) {
+			bucketSize = len(dir.List)
 		}
+		picks := logica.ClosestNodesForNFTWithDir(tokenNodo, dir, bucketSize)
+		if len(picks) == 0 {
+			log.Printf("[bootstrap %s] nessun vicino calcolato; riprovo tra 1s", nodeID)
+			time.Sleep(1 * time.Second)
+			// una sola riprova “soft”
+			picks = logica.ClosestNodesForNFTWithDir(tokenNodo, dir, bucketSize)
+		}
+
+		bucket := make([][]byte, 0, len(picks))
+		for _, p := range picks {
+			if len(p.SHA) == 20 { // SHA1 length
+				bucket = append(bucket, p.SHA)
+			}
+		}
+
+		// rimuovi eventuale self e ordina (se la tua RemoveAndSortMe lo fa)
+		bucket = logica.RemoveAndSortMe(bucket, tokenNodo)
+
+		// salva kbucket.json
+		if err := logica.SaveKBucket(nodeID, bucket, filepath.Join(dataDir, "kbucket.json")); err != nil {
+			log.Fatalf("Errore salvataggio K-bucket: %v", err) // <-- usa err giusto
+		}
+
+		log.Printf("[bootstrap %s] kbucket salvato con %d vicini", nodeID, len(bucket))
 
 		select {} // blocca per sempre
 

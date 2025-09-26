@@ -1,9 +1,12 @@
 package logica
 
 import (
+	"bytes"
 	"encoding/hex"
+	"sort"
 
 	"fmt"
+	"kademlia-nft/common"
 	pb "kademlia-nft/proto/kad"
 	"log"
 	"os"
@@ -43,37 +46,126 @@ func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.Store
 	return &pb.StoreRes{Ok: true}, nil
 }
 
+/*
+	func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
+		dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+		if dataDir == "" {
+			dataDir = "/data"
+		}
+
+		// Chiave in HEX per log e filename
+		keyRaw := req.GetKey().GetKey()
+		keyHex := strings.ToLower(hex.EncodeToString(keyRaw))
+		fileName := HexFileNameFromName(keyRaw) // passa i bytes, NON string(keyRaw)
+		filePath := filepath.Join(dataDir, fileName)
+
+		log.Printf("[SERVER %s] LookupNFT: keyHex='%s' → file='%s'",
+			os.Getenv("NODE_ID"), keyHex, fileName)
+
+		// --- Present on this node?
+		if b, err := os.ReadFile(filePath); err == nil {
+			log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
+			resp := &pb.LookupNFTRes{
+				Found: true,
+				Holder: &pb.Node{
+					Id:   os.Getenv("NODE_ID"), // string UTF-8
+					Host: os.Getenv("NODE_ID"),
+					Port: 8000,
+				},
+				Value: &pb.NFTValue{Bytes: b},
+			}
+			return resp, nil
+		}
+
+		// --- Not found: build nearest from kbucket.json
+		kbPath := filepath.Join(dataDir, "kbucket.json")
+		kbBytes, err := os.ReadFile(kbPath)
+		if err != nil {
+			log.Printf("[SERVER %s] Nessun kbucket.json: %v", os.Getenv("NODE_ID"), err)
+			return &pb.LookupNFTRes{Found: false}, nil
+		}
+
+		var parsed struct {
+			NodeID    string   `json:"node_id"`
+			BucketHex []string `json:"bucket_hex"`
+			SavedAt   string   `json:"saved_at"`
+		}
+		if err := json.Unmarshal(kbBytes, &parsed); err != nil {
+			log.Printf("[SERVER %s] Errore parse kbucket.json: %v", os.Getenv("NODE_ID"), err)
+			return &pb.LookupNFTRes{Found: false}, nil
+		}
+
+		nearest := make([]*pb.Node, 0, len(parsed.BucketHex))
+		for i, hx := range parsed.BucketHex {
+			hx = strings.TrimSpace(strings.ToLower(hx))
+
+			// Deve essere esattamente 40 char esadecimali (SHA-1)
+			if len(hx) != 40 || !isHex(hx) || !utf8.ValidString(hx) {
+				log.Printf("⚠️ kbucket entry NON valida: idx=%d val=%q len=%d (hex=%v utf8=%v) — SKIP",
+					i, hx, len(hx), isHex(hx), utf8.ValidString(hx))
+				continue
+			}
+
+			nearest = append(nearest, &pb.Node{
+				Id:   hx,   // HEX = ASCII/UTF-8 → OK
+				Host: "",   // opzionale: popola se lo conosci, "" è valido
+				Port: 8000, // non influisce sull'UTF-8
+			})
+		}
+
+		log.Printf("[SERVER %s] Nearest=%d", os.Getenv("NODE_ID"), len(nearest))
+		for i, n := range nearest {
+			log.Printf(" nearest[%d]: id=%q host=%q port=%d (utf8 id=%v host=%v)",
+				i, n.Id, n.Host, n.Port, utf8.ValidString(n.Id), utf8.ValidString(n.Host))
+		}
+
+		// Pre-marshal DIAGNOSTICO: se fallisce, stampa dove
+		resp := &pb.LookupNFTRes{Found: false, Nearest: nearest}
+		if _, err := proto.Marshal(resp); err != nil {
+			log.Printf("💥 PRE-MARSHAL FALLITO: %v", err)
+			for i, n := range nearest {
+				log.Printf(" check nearest[%d]: idBytes=%x hostBytes=%x utf8(id)=%v utf8(host)=%v",
+					i, []byte(n.Id), []byte(n.Host), utf8.ValidString(n.Id), utf8.ValidString(n.Host))
+			}
+			// Ritorna comunque un INTERNAL con messaggio chiaro nei log
+			return nil, err
+		}
+
+		return resp, nil
+	}
+*/
 func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
 	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
 	if dataDir == "" {
 		dataDir = "/data"
 	}
 
-	// Chiave in HEX per log e filename
+	// Chiave richiesta (20 byte) e sue forme per log/confronti
 	keyRaw := req.GetKey().GetKey()
 	keyHex := strings.ToLower(hex.EncodeToString(keyRaw))
+
+	// Nome file locale = hex(key).json
 	fileName := HexFileNameFromName(keyRaw) // passa i bytes, NON string(keyRaw)
 	filePath := filepath.Join(dataDir, fileName)
 
 	log.Printf("[SERVER %s] LookupNFT: keyHex='%s' → file='%s'",
 		os.Getenv("NODE_ID"), keyHex, fileName)
 
-	// --- Present on this node?
+	// 1) Presente localmente?
 	if b, err := os.ReadFile(filePath); err == nil {
 		log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
-		resp := &pb.LookupNFTRes{
+		return &pb.LookupNFTRes{
 			Found: true,
 			Holder: &pb.Node{
-				Id:   os.Getenv("NODE_ID"), // string UTF-8
+				Id:   os.Getenv("NODE_ID"),
 				Host: os.Getenv("NODE_ID"),
 				Port: 8000,
 			},
 			Value: &pb.NFTValue{Bytes: b},
-		}
-		return resp, nil
+		}, nil
 	}
 
-	// --- Not found: build nearest from kbucket.json
+	// 2) Non trovato: costruisci i "nearest" partendo dal kbucket, ORDINATI per XOR distanza da keyRaw
 	kbPath := filepath.Join(dataDir, "kbucket.json")
 	kbBytes, err := os.ReadFile(kbPath)
 	if err != nil {
@@ -82,8 +174,8 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 	}
 
 	var parsed struct {
-		NodeID    string   `json:"node_id"`
-		BucketHex []string `json:"bucket_hex"`
+		NodeID    string   `json:"node_id"`    // atteso in hex (40 char) o vuoto
+		BucketHex []string `json:"bucket_hex"` // lista di ID in hex (40 char)
 		SavedAt   string   `json:"saved_at"`
 	}
 	if err := json.Unmarshal(kbBytes, &parsed); err != nil {
@@ -91,42 +183,77 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 		return &pb.LookupNFTRes{Found: false}, nil
 	}
 
-	nearest := make([]*pb.Node, 0, len(parsed.BucketHex))
+	// Calcola anche lo SHA1 del nome nodo (per sicurezza nel confronto "self")
+	selfIDFromName := strings.ToLower(hex.EncodeToString(common.Sha1ID(os.Getenv("NODE_ID"))))
+	selfIDFromKB := strings.ToLower(strings.TrimSpace(parsed.NodeID))
+
+	// helper XOR
+	xor := func(a, b []byte) []byte {
+		out := make([]byte, len(a))
+		for i := range a {
+			out[i] = a[i] ^ b[i]
+		}
+		return out
+	}
+
+	type cand struct {
+		idHex string
+		dist  []byte
+	}
+	var cands []cand
 	for i, hx := range parsed.BucketHex {
 		hx = strings.TrimSpace(strings.ToLower(hx))
-
-		// Deve essere esattamente 40 char esadecimali (SHA-1)
 		if len(hx) != 40 || !isHex(hx) || !utf8.ValidString(hx) {
-			log.Printf("⚠️ kbucket entry NON valida: idx=%d val=%q len=%d (hex=%v utf8=%v) — SKIP",
-				i, hx, len(hx), isHex(hx), utf8.ValidString(hx))
+			log.Printf("⚠️ kbucket entry NON valida: idx=%d val=%q len=%d — SKIP", i, hx, len(hx))
 			continue
 		}
 
-		nearest = append(nearest, &pb.Node{
-			Id:   hx,   // HEX = ASCII/UTF-8 → OK
-			Host: "",   // opzionale: popola se lo conosci, "" è valido
-			Port: 8000, // non influisce sull'UTF-8
+		// salta self (sia se uguale al NodeID del file che allo SHA1 del NODE_ID env)
+		if hx == selfIDFromKB || hx == selfIDFromName {
+			continue
+		}
+
+		idBytes, err := hex.DecodeString(hx)
+		if err != nil || len(idBytes) != len(keyRaw) {
+			continue
+		}
+		cands = append(cands, cand{
+			idHex: hx,
+			dist:  xor(keyRaw, idBytes),
 		})
 	}
 
-	log.Printf("[SERVER %s] Nearest=%d", os.Getenv("NODE_ID"), len(nearest))
-	for i, n := range nearest {
-		log.Printf(" nearest[%d]: id=%q host=%q port=%d (utf8 id=%v host=%v)",
-			i, n.Id, n.Host, n.Port, utf8.ValidString(n.Id), utf8.ValidString(n.Host))
+	if len(cands) == 0 {
+		log.Printf("[SERVER %s] kbucket vuoto o tutto invalido", os.Getenv("NODE_ID"))
+		return &pb.LookupNFTRes{Found: false}, nil
 	}
 
-	// Pre-marshal DIAGNOSTICO: se fallisce, stampa dove
+	// ORDINA per distanza XOR crescente (tie-break sull'ID hex)
+	sort.Slice(cands, func(i, j int) bool {
+		if c := bytes.Compare(cands[i].dist, cands[j].dist); c != 0 {
+			return c < 0
+		}
+		return cands[i].idHex < cands[j].idHex
+	})
+
+	// Costruisci risposta (ritorna tutti: il bucket è già limitato a K lato build)
+	nearest := make([]*pb.Node, 0, len(cands))
+	for _, c := range cands {
+		nearest = append(nearest, &pb.Node{
+			Id:   c.idHex,
+			Host: "",   // opzionale popolarlo se conosci mapping ID→host
+			Port: 8000, // irrilevante se client risolve via mappa
+		})
+	}
+
+	log.Printf("[SERVER %s] Nearest ordinati=%d (top=%s …)", os.Getenv("NODE_ID"), len(nearest), nearest[0].GetId())
+
+	// (facoltativo) sanity pre-marshal
 	resp := &pb.LookupNFTRes{Found: false, Nearest: nearest}
 	if _, err := proto.Marshal(resp); err != nil {
 		log.Printf("💥 PRE-MARSHAL FALLITO: %v", err)
-		for i, n := range nearest {
-			log.Printf(" check nearest[%d]: idBytes=%x hostBytes=%x utf8(id)=%v utf8(host)=%v",
-				i, []byte(n.Id), []byte(n.Host), utf8.ValidString(n.Id), utf8.ValidString(n.Host))
-		}
-		// Ritorna comunque un INTERNAL con messaggio chiaro nei log
 		return nil, err
 	}
-
 	return resp, nil
 }
 

@@ -109,6 +109,7 @@ func main() {
 
 		//ora ho nome dei nodi e hash
 		out, err := ui.Reverse2(nodii)
+		fmt.Println(out)
 		if err != nil {
 			log.Fatal("Errore Reverse2:", err)
 		}
