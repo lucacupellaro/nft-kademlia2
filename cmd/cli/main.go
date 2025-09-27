@@ -114,11 +114,19 @@ func main() {
 			log.Fatal("Errore Reverse2:", err)
 		}
 		//fmt.Printf("Nodi: %v\n", out)
-
-		if err := ui.LookupNFTOnNodeByName(line, out, line1, 30); err != nil {
-			fmt.Println("Errore:", err)
+		rounds, found, err := ui.LookupNFTOnNodeByNameAlpha(line, out, line1 /*maxRounds=*/, 30 /*alpha=*/, 3)
+		if err != nil { /* gestisci errore */
 		}
-
+		if found {
+			fmt.Printf("✅ trovato in %d round (α=3)\n", rounds)
+		} else {
+			fmt.Printf("✖ non trovato dopo %d round (α=3)\n", rounds)
+		}
+		/*
+			if err := ui.LookupNFTOnNodeByName(line, out, line1, 30); err != nil {
+				fmt.Println("Errore:", err)
+			}
+		*/
 	}
 	if choice == 4 {
 

@@ -73,10 +73,6 @@ func RemoveAndSortMe(bucket [][]byte, selfId []byte) [][]byte {
 
 }
 
-type KademliaServer struct {
-	pb.UnimplementedKademliaServer
-}
-
 func GetNodeListIDs(seederAddr, requesterID string) ([]string, error) {
 	// 1) connetti al seeder via gRPC
 	conn, err := grpc.Dial(seederAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))

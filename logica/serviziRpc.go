@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"sort"
+	"sync"
 
 	"fmt"
 	"kademlia-nft/common"
@@ -24,6 +25,37 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type KademliaServer struct {
+	pb.UnimplementedKademliaServer
+
+	kbMu        sync.RWMutex // protegge kbucket.json
+	rebalanceMu sync.Mutex   // opzionale: serializza Rebalance
+
+	fileMuMap   map[string]*sync.RWMutex // lock per-file NFT (<hex>.json)
+	fileMuMapMu sync.Mutex               // protegge la mappa dei lock
+}
+
+func NewKademliaServer() *KademliaServer {
+	return &KademliaServer{
+		fileMuMap: make(map[string]*sync.RWMutex),
+	}
+}
+
+// ritorna (creandolo se serve) il lock per un certo file NFT
+func (s *KademliaServer) fileLock(keyHex string) *sync.RWMutex {
+	s.fileMuMapMu.Lock()
+	if s.fileMuMap == nil { // <-- init difensiva
+		s.fileMuMap = make(map[string]*sync.RWMutex)
+	}
+	mu, ok := s.fileMuMap[keyHex]
+	if !ok {
+		mu = &sync.RWMutex{}
+		s.fileMuMap[keyHex] = mu
+	}
+	s.fileMuMapMu.Unlock()
+	return mu
+}
+
 func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.StoreRes, error) {
 	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
 	if dataDir == "" {
@@ -33,12 +65,13 @@ func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.Store
 		return nil, fmt.Errorf("creazione dir %s: %w", dataDir, err)
 	}
 
+	keyHex := strings.ToLower(hex.EncodeToString(req.GetKey().GetKey()))
+	mu := s.fileLock(keyHex) // ⇦ lock per questo NFT
+	mu.Lock()
+	defer mu.Unlock()
+
 	fileName := fmt.Sprintf("%x.json", req.Key.Key)
 	filePath := filepath.Join(dataDir, fileName)
-
-	// (facoltativo) log utile per conferma
-	//abs, _ := filepath.Abs(filePath)
-	//log.Printf("✅ Salvato NFT in %s (abs=%s)", filePath, abs)
 
 	if err := os.WriteFile(filePath, req.Value.Bytes, 0644); err != nil {
 		return nil, fmt.Errorf("scrittura file %s: %w", filePath, err)
@@ -46,94 +79,6 @@ func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.Store
 	return &pb.StoreRes{Ok: true}, nil
 }
 
-/*
-	func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
-		dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
-		if dataDir == "" {
-			dataDir = "/data"
-		}
-
-		// Chiave in HEX per log e filename
-		keyRaw := req.GetKey().GetKey()
-		keyHex := strings.ToLower(hex.EncodeToString(keyRaw))
-		fileName := HexFileNameFromName(keyRaw) // passa i bytes, NON string(keyRaw)
-		filePath := filepath.Join(dataDir, fileName)
-
-		log.Printf("[SERVER %s] LookupNFT: keyHex='%s' → file='%s'",
-			os.Getenv("NODE_ID"), keyHex, fileName)
-
-		// --- Present on this node?
-		if b, err := os.ReadFile(filePath); err == nil {
-			log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
-			resp := &pb.LookupNFTRes{
-				Found: true,
-				Holder: &pb.Node{
-					Id:   os.Getenv("NODE_ID"), // string UTF-8
-					Host: os.Getenv("NODE_ID"),
-					Port: 8000,
-				},
-				Value: &pb.NFTValue{Bytes: b},
-			}
-			return resp, nil
-		}
-
-		// --- Not found: build nearest from kbucket.json
-		kbPath := filepath.Join(dataDir, "kbucket.json")
-		kbBytes, err := os.ReadFile(kbPath)
-		if err != nil {
-			log.Printf("[SERVER %s] Nessun kbucket.json: %v", os.Getenv("NODE_ID"), err)
-			return &pb.LookupNFTRes{Found: false}, nil
-		}
-
-		var parsed struct {
-			NodeID    string   `json:"node_id"`
-			BucketHex []string `json:"bucket_hex"`
-			SavedAt   string   `json:"saved_at"`
-		}
-		if err := json.Unmarshal(kbBytes, &parsed); err != nil {
-			log.Printf("[SERVER %s] Errore parse kbucket.json: %v", os.Getenv("NODE_ID"), err)
-			return &pb.LookupNFTRes{Found: false}, nil
-		}
-
-		nearest := make([]*pb.Node, 0, len(parsed.BucketHex))
-		for i, hx := range parsed.BucketHex {
-			hx = strings.TrimSpace(strings.ToLower(hx))
-
-			// Deve essere esattamente 40 char esadecimali (SHA-1)
-			if len(hx) != 40 || !isHex(hx) || !utf8.ValidString(hx) {
-				log.Printf("⚠️ kbucket entry NON valida: idx=%d val=%q len=%d (hex=%v utf8=%v) — SKIP",
-					i, hx, len(hx), isHex(hx), utf8.ValidString(hx))
-				continue
-			}
-
-			nearest = append(nearest, &pb.Node{
-				Id:   hx,   // HEX = ASCII/UTF-8 → OK
-				Host: "",   // opzionale: popola se lo conosci, "" è valido
-				Port: 8000, // non influisce sull'UTF-8
-			})
-		}
-
-		log.Printf("[SERVER %s] Nearest=%d", os.Getenv("NODE_ID"), len(nearest))
-		for i, n := range nearest {
-			log.Printf(" nearest[%d]: id=%q host=%q port=%d (utf8 id=%v host=%v)",
-				i, n.Id, n.Host, n.Port, utf8.ValidString(n.Id), utf8.ValidString(n.Host))
-		}
-
-		// Pre-marshal DIAGNOSTICO: se fallisce, stampa dove
-		resp := &pb.LookupNFTRes{Found: false, Nearest: nearest}
-		if _, err := proto.Marshal(resp); err != nil {
-			log.Printf("💥 PRE-MARSHAL FALLITO: %v", err)
-			for i, n := range nearest {
-				log.Printf(" check nearest[%d]: idBytes=%x hostBytes=%x utf8(id)=%v utf8(host)=%v",
-					i, []byte(n.Id), []byte(n.Host), utf8.ValidString(n.Id), utf8.ValidString(n.Host))
-			}
-			// Ritorna comunque un INTERNAL con messaggio chiaro nei log
-			return nil, err
-		}
-
-		return resp, nil
-	}
-*/
 func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
 	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
 	if dataDir == "" {
@@ -145,34 +90,45 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 	keyHex := strings.ToLower(hex.EncodeToString(keyRaw))
 
 	// Nome file locale = hex(key).json
-	fileName := HexFileNameFromName(keyRaw) // passa i bytes, NON string(keyRaw)
+	fileName := fmt.Sprintf("%s.json", keyHex)
 	filePath := filepath.Join(dataDir, fileName)
 
 	log.Printf("[SERVER %s] LookupNFT: keyHex='%s' → file='%s'",
 		os.Getenv("NODE_ID"), keyHex, fileName)
 
-	// 1) Presente localmente?
-	if b, err := os.ReadFile(filePath); err == nil {
-		log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
-		return &pb.LookupNFTRes{
-			Found: true,
-			Holder: &pb.Node{
-				Id:   os.Getenv("NODE_ID"),
-				Host: os.Getenv("NODE_ID"),
-				Port: 8000,
-			},
-			Value: &pb.NFTValue{Bytes: b},
-		}, nil
+	// 1) Presente localmente? (lettura protetta da RLock per-file)
+	{
+		mu := s.fileLock(keyHex)
+		mu.RLock()
+		b, err := os.ReadFile(filePath)
+		mu.RUnlock()
+
+		if err == nil {
+			log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
+			return &pb.LookupNFTRes{
+				Found: true,
+				Holder: &pb.Node{
+					Id:   os.Getenv("NODE_ID"),
+					Host: os.Getenv("NODE_ID"),
+					Port: 8000,
+				},
+				Value: &pb.NFTValue{Bytes: b},
+			}, nil
+		}
+		// se err != nil, proseguiamo coi nearest
 	}
 
-	// 2) Non trovato: costruisci i "nearest" partendo dal kbucket, ORDINATI per XOR distanza da keyRaw
+	// 2) Non trovato: leggi kbucket.json sotto RLock (solo per l'I/O)
 	kbPath := filepath.Join(dataDir, "kbucket.json")
+	s.kbMu.RLock()
 	kbBytes, err := os.ReadFile(kbPath)
+	s.kbMu.RUnlock()
 	if err != nil {
 		log.Printf("[SERVER %s] Nessun kbucket.json: %v", os.Getenv("NODE_ID"), err)
 		return &pb.LookupNFTRes{Found: false}, nil
 	}
 
+	// --- parsing senza lock ---
 	var parsed struct {
 		NodeID    string   `json:"node_id"`    // atteso in hex (40 char) o vuoto
 		BucketHex []string `json:"bucket_hex"` // lista di ID in hex (40 char)
