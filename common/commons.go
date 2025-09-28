@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"math/big"
+	"math/bits"
 )
 
 func Sha1ID(tokenID string) []byte {
@@ -33,4 +34,27 @@ func XorDist(a20 []byte, b20 []byte) *big.Int {
 		nb[i] = a20[i] ^ b20[i]
 	}
 	return new(big.Int).SetBytes(nb)
+}
+
+// MSBIndex calcola l'indice del bit più significativo a 1 della distanza d (Xor tra a e b)
+func MSBIndex(a, b []byte) (int, error) {
+	d, err := XOR(a, b)
+	if err != nil {
+		return -1, err
+	}
+	n := len(d)
+	if n == 0 {
+		return -1, fmt.Errorf("empty input")
+	}
+
+	for i := 0; i < n; i++ {
+		if d[i] != 0 {
+
+			posInByte := bits.Len8(d[i]) - 1
+
+			return (n-1-i)*8 + posInByte, nil
+		}
+	}
+
+	return -1, nil
 }

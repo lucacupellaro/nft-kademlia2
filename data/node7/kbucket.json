@@ -1,11 +1,76 @@
 {
-  "node_id": "node7",
-  "bucket_hex": [
-    "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
-    "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
-    "d88cfbd77c51a97a7709265610deb4655b1d9b73",
-    "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
-    "9da30539af3639c600c6256f7691750a581c36c2"
-  ],
-  "saved_at": "2025-09-27T12:22:41Z"
+  "self_node": "node7",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-28T10:16:53Z",
+  "buckets": {
+    "153": [
+      {
+        "name": "node18",
+        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "dist": "033622314c9d779b4c0e172456fe014298eb281b"
+      }
+    ],
+    "154": [
+      {
+        "name": "node8",
+        "sha": "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
+        "dist": "0665d350f2ec62ed399e2f27751dfc23a057b675"
+      }
+    ],
+    "156": [
+      {
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": "18b2ae062a530a43558ca8c17690175a6d936ead"
+      },
+      {
+        "name": "node30",
+        "sha": "dfaa57648a8beea08520461876334a51dc2da66f",
+        "dist": "1f9402b5dc894d99a7a5c88f107de96eeaa353b1"
+      }
+    ],
+    "157": [
+      {
+        "name": "node16",
+        "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
+        "dist": "2cbdedbe296d63037ceaf7a2baa75bb32ef5a28b"
+      }
+    ],
+    "158": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "6451b5158cb2e6067f033041462ee3b739d7cce0"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "5d9d50e8f9349aff2243abf810dfd6356e92c31c"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "7098cecec9ea8e553614f7592eac8ca3b29f5a3d"
+      }
+    ],
+    "159": [
+      {
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
+        "dist": "ed811177dd751262d8de4d410ad92a1561cede60"
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "b4dbf16dfd71f681e83251e4b639e4f2b347d039"
+      },
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "c7bb7d94d0edfb299a80eea6f8bcea57de190210"
+      }
+    ]
+  },
+  "non_empty_buckets": 6
 }

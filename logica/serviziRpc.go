@@ -79,6 +79,155 @@ func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.Store
 	return &pb.StoreRes{Ok: true}, nil
 }
 
+// ======================= SERVER SIDE =======================
+// RPC: LookupNFT (usa il NUOVO formato di kbucket.json)
+func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
+	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+	if dataDir == "" {
+		dataDir = "/data"
+	}
+
+	keyRaw := req.GetKey().GetKey()
+	keyHex := strings.ToLower(hex.EncodeToString(keyRaw))
+	fileName := keyHex + ".json"
+	filePath := filepath.Join(dataDir, fileName)
+
+	log.Printf("[SERVER %s] LookupNFT: keyHex='%s' → file='%s'",
+		os.Getenv("NODE_ID"), keyHex, fileName)
+
+	// 1) Presente localmente?
+	{
+		mu := s.fileLock(keyHex)
+		mu.RLock()
+		b, err := os.ReadFile(filePath)
+		mu.RUnlock()
+		if err == nil {
+			log.Printf("[SERVER %s] TROVATO %s", os.Getenv("NODE_ID"), fileName)
+			return &pb.LookupNFTRes{
+				Found: true,
+				Holder: &pb.Node{
+					Id:   os.Getenv("NODE_ID"),
+					Host: os.Getenv("NODE_ID"),
+					Port: 8000,
+				},
+				Value: &pb.NFTValue{Bytes: b},
+			}, nil
+		}
+	}
+
+	// 2) Non trovato: leggi routing table NUOVA
+	kbPath := filepath.Join(dataDir, "kbucket.json")
+	s.kbMu.RLock()
+	kbBytes, err := os.ReadFile(kbPath)
+	s.kbMu.RUnlock()
+	if err != nil {
+		log.Printf("[SERVER %s] Nessun kbucket.json: %v", os.Getenv("NODE_ID"), err)
+		return &pb.LookupNFTRes{Found: false}, nil
+	}
+
+	// Strutture per il NUOVO formato
+	type PeerEntry struct {
+		Name string `json:"name"`
+		SHA  string `json:"sha"`  // 40 hex
+		Dist string `json:"dist"` // opzionale nel file; NON ci fidiamo: ricalcoliamo
+	}
+	type RoutingTableFile struct {
+		SelfNode        string                 `json:"self_node"`
+		BucketSize      int                    `json:"bucket_size"`
+		HashBits        int                    `json:"hash_bits"`
+		SavedAt         string                 `json:"saved_at"`
+		Buckets         map[string][]PeerEntry `json:"buckets"`
+		NonEmptyBuckets int                    `json:"non_empty_buckets"`
+	}
+
+	var rt RoutingTableFile
+	if err := json.Unmarshal(kbBytes, &rt); err != nil {
+		log.Printf("[SERVER %s] Errore parse kbucket.json: %v", os.Getenv("NODE_ID"), err)
+		return &pb.LookupNFTRes{Found: false}, nil
+	}
+
+	selfName := strings.TrimSpace(os.Getenv("NODE_ID"))
+	selfHexByName := strings.ToLower(hex.EncodeToString(common.Sha1ID(selfName)))
+
+	// helper XOR
+	xor := func(a, b []byte) []byte {
+		out := make([]byte, len(a))
+		for i := range a {
+			out[i] = a[i] ^ b[i]
+		}
+		return out
+	}
+
+	type cand struct {
+		idHex string
+		dist  []byte
+		name  string
+	}
+	cands := make([]cand, 0, 64)
+
+	// raccogli TUTTI i contatti da tutti i bucket
+	for _, list := range rt.Buckets {
+		for _, e := range list {
+			hx := strings.ToLower(strings.TrimSpace(e.SHA))
+			if len(hx) != 40 {
+				continue
+			}
+			if hx == selfHexByName {
+				continue
+			}
+			idBytes, decErr := hex.DecodeString(hx)
+			if decErr != nil || len(idBytes) != len(keyRaw) {
+				continue
+			}
+			cands = append(cands, cand{
+				idHex: hx,
+				dist:  xor(keyRaw, idBytes),
+				name:  e.Name,
+			})
+		}
+	}
+
+	if len(cands) == 0 {
+		log.Printf("[SERVER %s] routing table vuota/illeggibile", os.Getenv("NODE_ID"))
+		return &pb.LookupNFTRes{Found: false}, nil
+	}
+
+	// ordina per distanza a key (tie-break per idHex)
+	sort.Slice(cands, func(i, j int) bool {
+		if c := bytes.Compare(cands[i].dist, cands[j].dist); c != 0 {
+			return c < 0
+		}
+		return cands[i].idHex < cands[j].idHex
+	})
+
+	// opzionale: cappiamo al bucket size (K)
+	K := rt.BucketSize
+	if K <= 0 {
+		K = 20
+	}
+	if len(cands) > K {
+		cands = cands[:K]
+	}
+
+	nearest := make([]*pb.Node, 0, len(cands))
+	for _, c := range cands {
+		nearest = append(nearest, &pb.Node{
+			Id:   c.idHex, // ID = SHA hex
+			Host: "",      // il client potrà risolvere via reverse-map (name -> host:port)
+			Port: 8000,
+		})
+	}
+
+	resp := &pb.LookupNFTRes{Found: false, Nearest: nearest}
+	// sanity pre-marshal
+	if _, err := proto.Marshal(resp); err != nil {
+		log.Printf("💥 PRE-MARSHAL FALLITO: %v", err)
+		return nil, err
+	}
+	return resp, nil
+}
+
+/*
 func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
 	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
 	if dataDir == "" {
@@ -212,6 +361,7 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 	}
 	return resp, nil
 }
+*/
 
 func (s *KademliaServer) GetKBucket(ctx context.Context, req *pb.GetKBucketReq) (*pb.GetKBucketResp, error) {
 	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))

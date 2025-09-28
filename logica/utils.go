@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -257,14 +256,13 @@ func RemoveNode1(nodi *[]string) {
 	*nodi = out
 }
 
-func RequireIntEnv(key string) int {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
-		log.Fatalf("Manca la variabile d'ambiente %s (mettila nel .env)", key)
+func RequireIntEnv(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
 	}
-	i, err := strconv.Atoi(v)
-	if err != nil {
-		log.Fatalf("%s=%q non è un intero valido", key, v)
+	if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		return n
 	}
-	return i
+	return def
 }

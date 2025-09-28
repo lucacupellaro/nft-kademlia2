@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"kademlia-nft/internal/ui"
@@ -51,7 +52,7 @@ type RunStats struct {
 // ------------------------------------------------------------
 
 func main() {
-	a := 3
+	a := 5
 	if a == 3 {
 		// carica i nomi NFT
 		names, err := readNames(csvNFT)
@@ -62,7 +63,7 @@ func main() {
 			log.Fatal("CSV NFT vuoto")
 		}
 
-		// nodo attivo + reverse
+		// nodi attivi + reverse
 		nodes, err := ui.ListActiveComposeServices(composeProject)
 		if err != nil {
 			log.Fatalf("Errore lista nodi: %v", err)
@@ -79,9 +80,12 @@ func main() {
 		nftName := names[0]
 		fmt.Printf("NFT scelto per il test concorrente: %s\n", nftName)
 
-		test.ConcurrentLookupTest(nodes, reverse, nftName, maxHops)
+		alpha := firstInt(os.Getenv("ALPHA"), 3)
+		if alpha <= 0 {
+			alpha = 3
+		}
+		ConcurrentLookupTestAlpha(nodes, reverse, nftName, alpha, maxHops)
 		return
-
 	}
 	if a == 1 {
 		names, err := readNames(csvNFT)
@@ -102,7 +106,6 @@ func main() {
 
 		// header
 		_ = w.Write([]string{"iterazione", "numero_nodi", "kbucket", "nHops_medio", "stdHops", "NFT_trovati", "NFT_non_trovati"})
-
 		w.Flush()
 
 		iter := 0
@@ -154,7 +157,9 @@ func main() {
 			hops := []int{}
 			for i, name := range names {
 				start := test.RandomNode(nodes)
-				h, found, err := test.LookupNFTOnNodeByNameStats(start, reverse, name, maxHops)
+				// usa α=3 di default qui
+				alpha := firstInt(os.Getenv("ALPHA"), 3)
+				h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
 				if err != nil || !found {
 					nonTrovati++
 					continue
@@ -183,6 +188,7 @@ func main() {
 		fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
 
 	} else {
+		// ---- Branch con flag ----
 
 		csvPath := flag.String("csv", "", "Percorso CSV con colonna Name (obbligatorio)")
 		envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
@@ -198,6 +204,8 @@ func main() {
 		bucketFrom := flag.Int("bucketFrom", 4, "Bucket size iniziale")
 		bucketTo := flag.Int("bucketTo", -1, "Bucket size finale (default: N dal .env)")
 
+		alphaFlag := flag.Int("alpha", 0, "Grado di parallelismo per round (alpha). Se 0, usa ALPHA dal .env o 3")
+
 		// se vuoi disattivare il rebuild each-iteration, passa -noRebuild
 		noRebuild := flag.Bool("noRebuild", false, "Se true NON ricostruisce i container ad ogni iterazione")
 
@@ -207,11 +215,19 @@ func main() {
 			log.Fatal("Devi specificare -csv /percorso/collections.csv (con colonna 'Name').")
 		}
 
-		// carica parametri da .env (N, BUCKET_SIZE, REPLICATION_FACTOR)
+		// carica parametri da .env (N, BUCKET_SIZE, REPLICATION_FACTOR, ALPHA)
 		env := readEnvFile(*envPath)
 		N := firstInt(env["N"], 0)
 		currentBucket := firstInt(env["BUCKET_SIZE"], 0)
 		repl := firstInt(env["REPLICATION_FACTOR"], 0)
+
+		alpha := *alphaFlag
+		if alpha <= 0 {
+			alpha = firstInt(env["ALPHA"], 3)
+		}
+		if alpha <= 0 {
+			alpha = 3
+		}
 
 		// bucketTo default = N (se non dato)
 		if *bucketTo < 0 {
@@ -303,7 +319,7 @@ func main() {
 			}
 
 			// 4) esegui la run completa (dettaglio per NFT)
-			stats, err := oneRun(names, nodes, reverse, *outCSV, *maxHops, N, currentBucket, repl)
+			stats, err := oneRun(names, nodes, reverse, *outCSV, *maxHops, N, currentBucket, repl, alpha)
 			if err != nil {
 				log.Fatalf("Errore run (bucket=%d): %v", b, err)
 			}
@@ -323,19 +339,17 @@ func main() {
 			})
 			sumW.Flush()
 
-			fmt.Printf("✅ Iterazione %d (BUCKET_SIZE=%d): trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d\n",
-				stats.Iteration, b, stats.Found, stats.NotFound, stats.AvgHops, stats.MaxHops)
+			fmt.Printf("✅ Iterazione %d (BUCKET_SIZE=%d, α=%d): trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d\n",
+				stats.Iteration, b, alpha, stats.Found, stats.NotFound, stats.AvgHops, stats.MaxHops)
 		}
 
 		fmt.Printf("🏁 Completato. Riassunto: %s\n", *outSummary)
-
 	}
-
 }
 
 // ------------------------------------------------------------
 
-func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHops int, N int, bucket int, repl int) (RunStats, error) {
+func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHops int, N int, bucket int, repl int, alpha int) (RunStats, error) {
 	rs := RunStats{
 		TotalNFTs:  len(names),
 		Found:      0,
@@ -362,7 +376,7 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 
 	// header
 	_ = w.Write([]string{
-		"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms",
+		"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha",
 	})
 	w.Flush()
 
@@ -381,10 +395,10 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 
 	for i, name := range names {
 		start := candidates[rand.Intn(len(candidates))]
-		fmt.Printf("[%d/%d] %s  (start=%s)\n", i+1, len(names), name, start)
+		fmt.Printf("[%d/%d] %s  (start=%s, α=%d)\n", i+1, len(names), name, start, alpha)
 
 		t0 := time.Now()
-		hops, found, err := test.LookupNFTOnNodeByNameStats(start, reverse, name, maxHops)
+		hops, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
 		elapsed := time.Since(t0).Milliseconds()
 
 		if err != nil {
@@ -392,7 +406,7 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 			_ = w.Write([]string{
 				start, name, "-1",
 				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucket),
-				strconv.FormatInt(elapsed, 10),
+				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
 			})
 			w.Flush()
 			rs.NotFound++
@@ -404,7 +418,7 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 			_ = w.Write([]string{
 				start, name, "-1",
 				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucket),
-				strconv.FormatInt(elapsed, 10),
+				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
 			})
 			w.Flush()
 			rs.NotFound++
@@ -413,7 +427,7 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 			_ = w.Write([]string{
 				start, name, strconv.Itoa(hops),
 				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucket),
-				strconv.FormatInt(elapsed, 10),
+				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
 			})
 			w.Flush()
 
@@ -430,6 +444,37 @@ func oneRun(names []string, nodes []string, reverse []Pair, outCSV string, maxHo
 		rs.AvgHops = float64(sumHops) / float64(rs.Found)
 	}
 	return rs, nil
+}
+
+// ---------- Test concorrente basato su nuova lookup α ----------
+func ConcurrentLookupTestAlpha(nodes []string, reverse []Pair, nftName string, alpha int, maxRounds int) {
+	if len(nodes) == 0 {
+		fmt.Println("Nessun nodo attivo")
+		return
+	}
+	workers := minInt(5, len(nodes))
+	fmt.Printf("Avvio %d lookup concorrenti per '%s' (α=%d)\n", workers, nftName, alpha)
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		start := test.RandomNode(nodes)
+		wg.Add(1)
+		go func(s string, idx int) {
+			defer wg.Done()
+			fmt.Printf("[T%02d] start=%s\n", idx, s)
+			hops, found, err := ui.LookupNFTOnNodeByNameAlpha(s, reverse, nftName, alpha, maxRounds)
+			if err != nil {
+				fmt.Printf("[T%02d] errore: %v\n", idx, err)
+				return
+			}
+			if !found {
+				fmt.Printf("[T%02d] non trovato (hop=-1)\n", idx)
+			} else {
+				fmt.Printf("[T%02d] trovato in %d hop\n", idx, hops)
+			}
+		}(start, i+1)
+	}
+	wg.Wait()
 }
 
 // ---------- Lettura nomi dal CSV (colonna Name) ----------
@@ -621,4 +666,11 @@ func keys(m map[string]string) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

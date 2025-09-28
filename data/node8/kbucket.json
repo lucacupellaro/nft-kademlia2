@@ -1,11 +1,74 @@
 {
-  "node_id": "node8",
-  "bucket_hex": [
-    "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
-    "c03e55d15602a33922858e97664ea33f368ef5de",
-    "d88cfbd77c51a97a7709265610deb4655b1d9b73",
-    "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
-    "9da30539af3639c600c6256f7691750a581c36c2"
-  ],
-  "saved_at": "2025-09-27T12:22:41Z"
+  "self_node": "node8",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-28T10:16:53Z",
+  "buckets": {
+    "154": [
+      {
+        "name": "node7",
+        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
+        "dist": "0665d350f2ec62ed399e2f27751dfc23a057b675"
+      },
+      {
+        "name": "node18",
+        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "dist": "0553f161be7115767590380323e3fd6138bc9e6e"
+      }
+    ],
+    "156": [
+      {
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": "1ed77d56d8bf68ae6c1287e6038deb79cdc4d8d8"
+      },
+      {
+        "name": "node30",
+        "sha": "dfaa57648a8beea08520461876334a51dc2da66f",
+        "dist": "19f1d1e52e652f749e3be7a86560154d4af4e5c4"
+      }
+    ],
+    "157": [
+      {
+        "name": "node16",
+        "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
+        "dist": "2ad83eeedb8101ee4574d885cfbaa7908ea214fe"
+      }
+    ],
+    "158": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "623466457e5e84eb469d1f6633331f9499807a95"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "5bf883b80bd8f8121bdd84df65c22a16cec57569"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "76fd1d9e3b06ecb80f8ad87e5bb1708012c8ec48"
+      }
+    ],
+    "159": [
+      {
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
+        "dist": "ebe4c2272f99708fe14062667fc4d636c1996815"
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "b2be223d0f9d946cd1ac7ec3c32418d11310664c"
+      },
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "c1deaec4220199c4a31ec1818da116747e4eb465"
+      }
+    ]
+  },
+  "non_empty_buckets": 5
 }

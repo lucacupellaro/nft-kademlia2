@@ -1,11 +1,60 @@
 {
-  "node_id": "node2",
-  "bucket_hex": [
-    "0b37a0395c4840fa2c09cd3eb46850b2073046a5",
-    "051b9001d5d1f182ca669af3fc5fb8665292b4f2",
-    "0785284586ef5810b80560319ef24968e897f7ce",
-    "18ba4a1c9cb724a05c46c0dbf6a6f59552dbac17",
-    "6a18926c652b036b2056254766facd464656c3d8"
-  ],
-  "saved_at": "2025-09-27T12:22:41Z"
+  "self_node": "node2",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-28T10:16:52Z",
+  "buckets": {
+    "157": [
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "2a3a6ce30d98e94b425ea3e7f265c042bfd7dc70"
+      },
+      {
+        "name": "node14",
+        "sha": "18ba4a1c9cb724a05c46c0dbf6a6f59552dbac17",
+        "dist": "35050eba17c095fba61d030d9a317cbf059b87a9"
+      },
+      {
+        "name": "node15",
+        "sha": "051b9001d5d1f182ca669af3fc5fb8665292b4f2",
+        "dist": "28a4d4a75ea640d9303d592590c8314c05d29f4c"
+      }
+    ],
+    "158": [
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "595ae01a2004e4e330ec1ca5bce0cee7d2890e59"
+      },
+      {
+        "name": "node10",
+        "sha": "4e15dc72a6c09157df7aa886c76c4d0af1ac72c6",
+        "dist": "63aa98d42db7200c25216b50abfbc420a6ec5978"
+      },
+      {
+        "name": "node19",
+        "sha": "6a18926c652b036b2056254766facd464656c3d8",
+        "dist": "47a7d6caee5cb230da0de6910a6d446c1116e866"
+      }
+    ],
+    "159": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "89d0a46251c7f464a7dd7d004cf7c9a258191280"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "b01c419f2441889dfa9de6b91a06fc200f5c1d7c"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "9d19dfb9149f9c37eecaba182475a6b6d351845d"
+      }
+    ]
+  },
+  "non_empty_buckets": 3
 }

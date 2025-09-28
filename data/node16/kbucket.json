@@ -1,11 +1,60 @@
 {
-  "node_id": "node16",
-  "bucket_hex": [
-    "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
-    "c03e55d15602a33922858e97664ea33f368ef5de",
-    "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
-    "d88cfbd77c51a97a7709265610deb4655b1d9b73",
-    "a845fafee582dfcb8afbd9ea5b8512e8dd9643b8"
-  ],
-  "saved_at": "2025-09-27T12:22:41Z"
+  "self_node": "node16",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-28T10:16:52Z",
+  "buckets": {
+    "157": [
+      {
+        "name": "node7",
+        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
+        "dist": "2cbdedbe296d63037ceaf7a2baa75bb32ef5a28b"
+      },
+      {
+        "name": "node8",
+        "sha": "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
+        "dist": "2ad83eeedb8101ee4574d885cfbaa7908ea214fe"
+      },
+      {
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": "340f43b8033e694029665f63cc374ce94366cc26"
+      }
+    ],
+    "158": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "48ec58aba5df850503e9c7e3fc89b80417226e6b"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "7120bd56d059f9fc5ea95c5aaa788d8640676197"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "5c252370e087ed564afe00fb940bd7109c6af8b6"
+      }
+    ],
+    "159": [
+      {
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
+        "dist": "c13cfcc9f4187161a434bae3b07e71a64f3b7ceb"
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "98661cd3d41c958294d8a6460c9ebf419db272b2"
+      },
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "eb06902af980982ae66a1904421bb1e4f0eca09b"
+      }
+    ]
+  },
+  "non_empty_buckets": 3
 }

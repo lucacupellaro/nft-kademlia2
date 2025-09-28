@@ -8,7 +8,7 @@ services:
       - NODE_ID=node1
       - DATA_DIR=/data
       - SEED=true
-      - NODES=node2,node3,node4,node5,node6,node7,node8,node9,node10,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20
+      - NODES=node2,node3,node4,node5,node6,node7,node8,node9,node10,node11,node12,node13,node14,node15,node16,node17,node18,node19,node20,node21,node22,node23,node24,node25,node26,node27,node28,node29,node30
     ports:
       - "8001:8000"
     volumes:
@@ -298,6 +298,156 @@ services:
       - "8020:8000"
     volumes:
       - ./data/node20:/data
+    networks:
+      - kadnet
+
+  node21:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node21
+      - DATA_DIR=/data
+    ports:
+      - "8021:8000"
+    volumes:
+      - ./data/node21:/data
+    networks:
+      - kadnet
+
+  node22:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node22
+      - DATA_DIR=/data
+    ports:
+      - "8022:8000"
+    volumes:
+      - ./data/node22:/data
+    networks:
+      - kadnet
+
+  node23:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node23
+      - DATA_DIR=/data
+    ports:
+      - "8023:8000"
+    volumes:
+      - ./data/node23:/data
+    networks:
+      - kadnet
+
+  node24:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node24
+      - DATA_DIR=/data
+    ports:
+      - "8024:8000"
+    volumes:
+      - ./data/node24:/data
+    networks:
+      - kadnet
+
+  node25:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node25
+      - DATA_DIR=/data
+    ports:
+      - "8025:8000"
+    volumes:
+      - ./data/node25:/data
+    networks:
+      - kadnet
+
+  node26:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node26
+      - DATA_DIR=/data
+    ports:
+      - "8026:8000"
+    volumes:
+      - ./data/node26:/data
+    networks:
+      - kadnet
+
+  node27:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node27
+      - DATA_DIR=/data
+    ports:
+      - "8027:8000"
+    volumes:
+      - ./data/node27:/data
+    networks:
+      - kadnet
+
+  node28:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node28
+      - DATA_DIR=/data
+    ports:
+      - "8028:8000"
+    volumes:
+      - ./data/node28:/data
+    networks:
+      - kadnet
+
+  node29:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node29
+      - DATA_DIR=/data
+    ports:
+      - "8029:8000"
+    volumes:
+      - ./data/node29:/data
+    networks:
+      - kadnet
+
+  node30:
+    image: "kademlia-nft-node:latest"
+    build: .
+    env_file:
+      - .env
+    environment:
+      - NODE_ID=node30
+      - DATA_DIR=/data
+    ports:
+      - "8030:8000"
+    volumes:
+      - ./data/node30:/data
     networks:
       - kadnet
 

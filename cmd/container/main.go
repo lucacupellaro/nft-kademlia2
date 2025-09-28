@@ -36,7 +36,7 @@ func main() {
 
 	if isSeeder {
 
-		repFactor := logica.RequireIntEnv("REPLICATION_FACTOR")
+		repFactor := logica.RequireIntEnv("REPLICATION_FACTOR", 3)
 
 		fmt.Printf("Replication factor: %d\n", repFactor)
 
@@ -164,8 +164,6 @@ func main() {
 			for i := 0; i < repFactor; i++ {
 				nodi = append(nodi, nfts[j].AssignedNodesToken[i])
 			}
-			//nodi = append(nodi, nfts[j].AssignedNodesToken[0])
-			//nodi = append(nodi, nfts[j].AssignedNodesToken[1])
 
 			if err := logica.StoreNFTToNodes(nfts[j], nfts[j].TokenID, nfts[j].Name, nodi, 24*3600); err != nil {
 				fmt.Println("Errore:", err)
@@ -180,29 +178,28 @@ func main() {
 
 	} else {
 
-		//------------------- Bootstrap K-Bucket robusto -------------------//
+		// ------------------- Bootstrap dei Peer, recupero lista nodi dal seeder e le varibili d'ambiente per costruire la routing table ------------------- //
 
 		dataDir := "/data"
 		if err := os.MkdirAll(dataDir, 0o755); err != nil {
 			log.Fatalf("Impossibile creare %s: %v", dataDir, err)
 		}
 
+		// ID del nodo locale (nome → SHA1 a 160 bit)
 		nodeID := strings.TrimSpace(os.Getenv("NODE_ID"))
 		if nodeID == "" {
 			log.Fatalf("NODE_ID non impostato")
 		}
-		tokenNodo := common.Sha1ID(nodeID)
+		selfSHA := common.Sha1ID(nodeID)
 
-		bucketSize := logica.RequireIntEnv("BUCKET_SIZE")
+		bucketSize := logica.RequireIntEnv("BUCKET_SIZE", 4)
 		if bucketSize <= 0 {
 			bucketSize = 5
 		}
-		fmt.Printf("Bucket size: %d\n", bucketSize)
 
-		// retry: aspetta che il seeder sia pronto e che la lista nodi sia “sufficiente”
-
-		var dir *logica.ByteMapping
-		retryMax := 60 // ~60 secondi
+		// Retry per attendere il seeder e una lista sufficientemente popolata
+		var nodes []string
+		retryMax := 60
 		for attempt := 1; attempt <= retryMax; attempt++ {
 			nl, err := logica.GetNodeListIDs("node1:8000", nodeID)
 			if err != nil {
@@ -211,8 +208,8 @@ func main() {
 				continue
 			}
 
-			// filtra, normalizza, de-duplica
-			seen := make(map[string]bool)
+			// de-dup, normalizza, rimuovi self
+			seen := make(map[string]bool, len(nl))
 			clean := make([]string, 0, len(nl))
 			for _, n := range nl {
 				n = strings.TrimSpace(n)
@@ -222,57 +219,52 @@ func main() {
 				seen[n] = true
 				clean = append(clean, n)
 			}
-
 			if len(clean) == 0 {
 				log.Printf("[bootstrap %s] lista nodi vuota (tentativo %d/%d) — retry", nodeID, attempt, retryMax)
 				time.Sleep(1 * time.Second)
 				continue
 			}
 
-			dir = logica.BuildByteMappingSHA1(clean)
-			if dir == nil || len(dir.List) == 0 {
-				log.Printf("[bootstrap %s] mapping nullo (tentativo %d/%d) — retry", nodeID, attempt, retryMax)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			// ok, abbiamo una directory sensata
-			nodes := clean
+			nodes = clean
 			fmt.Printf("[bootstrap %s] lista nodi ottenuta (%d nodi) dopo %d tentativi\n", nodeID, len(nodes), attempt)
 			break
 		}
-		if dir == nil {
+		if len(nodes) == 0 {
 			log.Fatalf("[bootstrap %s] impossibile ottenere directory nodi dopo %d tentativi", nodeID, retryMax)
 		}
 
-		// calcola i più vicini (cap su bucketSize e nodi disponibili)
-		if bucketSize > len(dir.List) {
-			bucketSize = len(dir.List)
-		}
-		picks := logica.ClosestNodesForNFTWithDir(tokenNodo, dir, bucketSize)
-		if len(picks) == 0 {
-			log.Printf("[bootstrap %s] nessun vicino calcolato; riprovo tra 1s", nodeID)
-			time.Sleep(1 * time.Second)
-			// una sola riprova “soft”
-			picks = logica.ClosestNodesForNFTWithDir(tokenNodo, dir, bucketSize)
-		}
+		// ------------------- Costruzione routing table con capienza bucket K e salvataggio -------------------
 
-		bucket := make([][]byte, 0, len(picks))
-		for _, p := range picks {
-			if len(p.SHA) == 20 { // SHA1 length
-				bucket = append(bucket, p.SHA)
+		const m = 160 // SHA-1 -> 160 bit
+
+		// buckets: indice bucket (int) -> lista nomi peer ([]string)
+		buckets := make(map[int][]string, m)
+
+		// Popola i bucket rispettando la capienza K (bucketSize)
+		for _, peerName := range nodes {
+			peerSHA := common.Sha1ID(peerName)
+			idx, err := common.MSBIndex(selfSHA, peerSHA)
+			if err != nil || idx < 0 || idx >= m {
+				continue
+			}
+
+			// Inserisci solo se il bucket non è pieno
+			if len(buckets[idx]) < bucketSize {
+				buckets[idx] = append(buckets[idx], peerName)
+
+			} else {
+				// bucket pieno → drop (per LRU: ping del più vecchio e rimpiazzo se non risponde)
 			}
 		}
 
-		// rimuovi eventuale self e ordina (se la tua RemoveAndSortMe lo fa)
-		bucket = logica.RemoveAndSortMe(bucket, tokenNodo)
-
-		// salva kbucket.json
-		if err := logica.SaveKBucket(nodeID, bucket, filepath.Join(dataDir, "kbucket.json")); err != nil {
-			log.Fatalf("Errore salvataggio K-bucket: %v", err) // <-- usa err giusto
+		// Salvataggio in JSON sui faile kbuckets.json
+		kbPath := filepath.Join(dataDir, "kbucket.json")
+		if err := logica.SaveRoutingTableJSON(nodeID, selfSHA, bucketSize, buckets, kbPath); err != nil {
+			log.Fatalf("Errore salvataggio K-bucket: %v", err)
 		}
 
-		log.Printf("[bootstrap %s] kbucket salvato con %d vicini", nodeID, len(bucket))
+		log.Printf("[bootstrap %s] routing table salvata in %s — bucketSize=%d, bucket non vuoti=%d",
+			nodeID, kbPath, bucketSize, len(buckets))
 
 		select {} // blocca per sempre
 

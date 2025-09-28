@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -23,7 +24,70 @@ type KBucketFile struct {
 	SavedAt   string   `json:"saved_at"`
 }
 
-// SaveKBucket salva il bucket del nodo su file JSON
+type PeerEntry struct {
+	Name string `json:"name"` // es. "node7"
+	SHA  string `json:"sha"`  // sha1 in hex del peer
+	Dist string `json:"dist"` // distanza XOR self^peer (hex)
+}
+
+type RoutingTableFile struct {
+	NodeID       string                 `json:"self_node"`
+	BucketSize   int                    `json:"bucket_size"`
+	HashBits     int                    `json:"hash_bits"` // 160 per SHA1
+	SavedAt      string                 `json:"saved_at"`
+	Buckets      map[string][]PeerEntry `json:"buckets"` // "0".."159" -> peers
+	NonEmptyInfo int                    `json:"non_empty_buckets"`
+}
+
+func SaveRoutingTableJSON(nodeID string, selfSHA []byte, bucketSize int, buckets map[int][]string, path string) error {
+	const hashBits = 160
+
+	dump := RoutingTableFile{
+		NodeID:     nodeID,
+		BucketSize: bucketSize,
+		HashBits:   hashBits,
+		SavedAt:    time.Now().UTC().Format(time.RFC3339),
+		Buckets:    make(map[string][]PeerEntry, len(buckets)),
+	}
+
+	nonEmpty := 0
+	for idx, names := range buckets {
+		if len(names) == 0 {
+			continue
+		}
+		// taglia comunque a K per coerenza
+		if len(names) > bucketSize {
+			names = names[:bucketSize]
+		}
+
+		entries := make([]PeerEntry, 0, len(names))
+		for _, name := range names {
+			peerSHA := common.Sha1ID(name) // []byte len=20
+			// XOR distance
+			x := make([]byte, len(selfSHA))
+			for i := range selfSHA {
+				x[i] = selfSHA[i] ^ peerSHA[i]
+			}
+			entries = append(entries, PeerEntry{
+				Name: name,
+				SHA:  hex.EncodeToString(peerSHA),
+				Dist: hex.EncodeToString(x),
+			})
+		}
+
+		dump.Buckets[strconv.Itoa(idx)] = entries
+		nonEmpty++
+	}
+	dump.NonEmptyInfo = nonEmpty
+
+	jsonBytes, err := json.MarshalIndent(dump, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, jsonBytes, 0o644)
+}
+
+// SaveKBucket(Nodi piu vicini) salva il bucket del nodo su file JSON
 func SaveKBucket(nodeID string, bucket [][]byte, path string) error {
 
 	bucketHex := make([]string, len(bucket))
