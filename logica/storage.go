@@ -188,7 +188,6 @@ func ClosestNodesForNFTWithDir(key []byte, dir *ByteMapping, k int) []NodePick {
 	if k > len(cands) {
 		k = len(cands)
 	}
-
 	// costruisci output
 	out := make([]NodePick, k)
 	for n := 0; n < k; n++ {
@@ -322,7 +321,7 @@ func ResolveAddrForNode(nodeName string) (string, error) {
 		name = "node" + name[len("nodo"):]
 	}
 	var n int
-	if _, err := fmt.Sscanf(name, "node%d", &n); err != nil || n < 1 || n > 11 {
+	if _, err := fmt.Sscanf(name, "node%d", &n); err != nil || n < 1 {
 		return "", fmt.Errorf("nome nodo non valido: %q", nodeName)
 	}
 	if os.Getenv("CLI_IN_DOCKER") == "1" {

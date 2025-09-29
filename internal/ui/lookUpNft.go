@@ -30,183 +30,164 @@ func Check(value string, list []Pair) string {
 	return "NOTFOUND"
 }
 
-// --------------------------------------------------
-func LookupNFTOnNodeByName(startNode string, str []Pair, nftName string, maxHops int) error {
-	if maxHops <= 0 {
-		maxHops = 15
-	}
+// --- util esterne che già hai altrove ---
+// ResolveStartHostPort(name) (string, error)
+// Check(idHex, reverse []Pair) string
+// common.Sha1ID(string) []byte
+// common.XOR(a,b []byte) ([]byte, error)
 
-	nftID20 := common.Sha1ID(nftName) // []byte(20)
-	visitedIDs := make(map[string]bool)
+// ====================== TIPI E UTIL ======================
 
-	// Hop 0: risolvi SOLO lo startNode
-	hostPort, err := ResolveStartHostPort(startNode)
-	if err != nil {
-		return fmt.Errorf("risoluzione %q fallita: %w", startNode, err)
-	}
-	currentLabel := startNode // per log
-
-	for hop := 0; hop < maxHops; hop++ {
-		fmt.Printf("🔎 Hop %d: cerco '%s' su %s (%s)\n", hop+1, nftName, currentLabel, hostPort)
-
-		conn, err := grpc.Dial(hostPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return fmt.Errorf("dial fallito %s: %w", hostPort, err)
-		}
-		client := pb.NewKademliaClient(conn)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		resp, rpcErr := client.LookupNFT(ctx, &pb.LookupNFTReq{
-			FromId: "CLI",
-			Key:    &pb.Key{Key: nftID20},
-		})
-		cancel()
-		_ = conn.Close()
-
-		if rpcErr != nil {
-			return fmt.Errorf("RPC fallita su %s: %w", currentLabel, rpcErr)
-		}
-
-		if resp.GetFound() {
-			fmt.Printf("✅ Trovato su nodo %s\n", resp.GetHolder().GetId())
-			fmt.Printf("Contenuto JSON:\n%s\n", string(resp.GetValue().GetBytes()))
-			return nil
-		}
-
-		nearest := resp.GetNearest()
-		if len(nearest) == 0 {
-			fmt.Println("✖ NFT non trovato e nessun nodo vicino restituito — arresto.")
-			return nil
-		}
-
-		// Prepara candidati usabili: (id, addr, label) con fallback via check()
-		type cand struct {
-			id    string
-			addr  string // host:port
-			label string // per log: host o "nodeX" o id short
-		}
-		usabili := make([]cand, 0, len(nearest))
-
-		fmt.Println("… nodi vicini suggeriti:")
-		for _, n := range nearest {
-			id := strings.TrimSpace(n.GetId())
-			if id == "" {
-				continue // senza ID non posso fare XOR
-			}
-			lcID := strings.ToLower(id)
-
-			var addr, label string
-			host := strings.TrimSpace(n.GetHost())
-			port := int(n.GetPort())
-			if host != "" && port > 0 {
-				addr = fmt.Sprintf("%s:%d", host, port)
-				label = host
-			} else {
-				// Fallback: mappa ID -> "nodeX" usando la tua tabella 'str'
-				name := Check(id, str)
-				if name != "NOTFOUND" {
-					if hp, e := ResolveStartHostPort(name); e == nil {
-						addr = hp
-						label = name
-					}
-				}
-			}
-
-			if addr == "" {
-				fmt.Printf("   - %s (endpoint mancante)\n", id)
-				continue
-			}
-			if visitedIDs[lcID] {
-				// già visitato: non lo ripropongo
-				fmt.Printf("   - %s (%s) [già visitato]\n", id, addr)
-				continue
-			}
-
-			if label == "" {
-				// etichetta estetica di fallback
-				if host != "" {
-					label = host
-				} else {
-					if len(id) >= 8 {
-						label = id[:8]
-					} else {
-						label = id
-					}
-				}
-			}
-
-			fmt.Printf("   - %s (%s)\n", id, addr)
-			usabili = append(usabili, cand{id: lcID, addr: addr, label: label})
-		}
-
-		if len(usabili) == 0 {
-			fmt.Println("✖ Nessun vicino utilizzabile non visitato — arresto.")
-			return nil
-		}
-
-		// Seleziona il più vicino usando la TUA funzione (input: lista di ID hex)
-		ids := make([]string, len(usabili))
-		for i, c := range usabili {
-			ids[i] = c.id
-		}
-
-		fmt.Printf("candidati: %v,", ids)
-		bestID, err := SceltaNodoPiuVicino(nftID20, ids)
-		if err != nil {
-			fmt.Printf("⚠️  Impossibile scegliere il nodo più vicino: %v — prendo il primo candidato.\n", err)
-			bestID = ids[0]
-		}
-		bestID = strings.ToLower(strings.TrimSpace(bestID))
-
-		// Recupera endpoint del bestID
-		var nextAddr, nextLabel string
-		for _, c := range usabili {
-			if c.id == bestID {
-				nextAddr = c.addr
-				nextLabel = c.label
-				break
-			}
-		}
-		if nextAddr == "" {
-			// come ulteriore fallback, prova mapping ID->nodeX e risolvi
-			if name := Check(bestID, str); name != "NOTFOUND" {
-				if hp, e := ResolveStartHostPort(name); e == nil {
-					nextAddr = hp
-					nextLabel = name
-				}
-			}
-		}
-		if nextAddr == "" {
-			fmt.Println("✖ Best candidato senza endpoint — arresto.")
-			return nil
-		}
-
-		// Marca visitato per ID
-		visitedIDs[bestID] = true
-
-		// Prepara hop successivo
-		hostPort = nextAddr
-		if nextLabel != "" {
-			currentLabel = nextLabel
-		} else {
-			currentLabel = bestID[:8]
-		}
-		fmt.Printf("➡️  Prossimo nodo scelto: %s\n", currentLabel)
-	}
-
-	fmt.Printf("⛔ Max hop (%d) raggiunto senza trovare '%s'.\n", maxHops, nftName)
-	return nil
+type cand struct {
+	idHex string // ID in hex (40 char)
+	addr  string // host:port risolto
+	label string // per logging (nome nodo o host)
+	dist  []byte // XOR(target, id)
 }
 
-// Lookup parallela stile Kademlia con grado di concorrenza alpha.
-// - startNode: nome del nodo di partenza (es. "node10")
-// - str: reverse map ID->nome (le tue Pair) usata come fallback per risolvere host:port
-// - nftName: chiave logica dell'NFT
-// - alpha: quante query in parallelo per round (tipico 3)
-// - maxRounds: limite ai round (non ai singoli hop RPC)
-// ======================= CLIENT / CLI SIDE =======================
-// Lookup iterativa stile Kademlia con α-parallel e cap a K; NON parte dal seeder.
-func LookupNFTOnNodeByNameAlpha(startNode string, str []Pair, nftName string, alpha int, maxRounds int) (round int, found bool, err error) {
+// ordina la shortlist per distanza crescente (tie-break su idHex)
+func sortShort(short []cand) {
+	sort.Slice(short, func(i, j int) bool {
+		if c := bytes.Compare(short[i].dist, short[j].dist); c != 0 {
+			return c < 0
+		}
+		return short[i].idHex < short[j].idHex
+	})
+}
+
+// taglia la shortlist a K elementi
+func trimToK(short []cand, K int) []cand {
+	if len(short) > K {
+		return short[:K]
+	}
+	return short
+}
+
+// distanza minima corrente nella shortlist (nil se vuota)
+func getClosest(short []cand) []byte {
+	if len(short) == 0 {
+		return nil
+	}
+	return short[0].dist
+}
+
+// restituisce fino a k candidati **non interrogati** (in ordine)
+func takeTopUnqueried(short []cand, queried map[string]bool, k int) []cand {
+	out := make([]cand, 0, k)
+	for _, c := range short {
+		if len(out) >= k {
+			break
+		}
+		if queried[c.idHex] {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// costruisce candidati da pb.Node; se host/port manca, usa reverse-map per risolvere.
+// skipID: ID hex da escludere (es. self)
+func buildFromNearest(nearest []*pb.Node, skipID string, reverse []Pair, target []byte) []cand {
+	seen := make(map[string]bool, len(nearest))
+	out := make([]cand, 0, len(nearest))
+
+	for _, n := range nearest {
+		id := strings.ToLower(strings.TrimSpace(n.GetId()))
+		if len(id) != 40 || id == skipID || seen[id] {
+			continue
+		}
+		seen[id] = true
+
+		// endpoint
+		var addr, label string
+		host := strings.TrimSpace(n.GetHost())
+		port := int(n.GetPort())
+		if host != "" && port > 0 {
+			addr = fmt.Sprintf("%s:%d", host, port)
+			label = host
+		} else {
+			if name := Check(id, reverse); name != "NOTFOUND" {
+				if hp, e := ResolveStartHostPort(name); e == nil && hp != "" {
+					addr = hp
+					label = name
+				}
+			}
+		}
+		if addr == "" {
+			continue
+		}
+		if label == "" {
+			if host != "" {
+				label = host
+			} else if len(id) >= 8 {
+				label = id[:8]
+			} else {
+				label = id
+			}
+		}
+
+		idBytes, err := hex.DecodeString(id)
+		if err != nil || len(idBytes) != len(target) {
+			continue
+		}
+		d, err := common.XOR(target, idBytes)
+		if err != nil {
+			continue
+		}
+
+		out = append(out, cand{
+			idHex: id,
+			addr:  addr,
+			label: label,
+			dist:  d,
+		})
+	}
+	return out
+}
+
+// unisce nuovi candidati nella shortlist, con dedup, sort e trim a K
+func mergeIntoShort(short []cand, add []cand, K int, idsInShort map[string]bool) ([]cand, int) {
+	added := 0
+	for _, c := range add {
+		if idsInShort[c.idHex] {
+			continue
+		}
+		idsInShort[c.idHex] = true
+		short = append(short, c)
+		added++
+	}
+	if added > 0 {
+		sortShort(short)
+		short = trimToK(short, K)
+	}
+	return short, added
+}
+
+// effettua una LookupNFT (FIND_VALUE) su un singolo candidato
+func rpcLookup(ctx context.Context, addr string, target []byte) (*pb.LookupNFTRes, error) {
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
+	defer conn.Close()
+
+	client := pb.NewKademliaClient(conn)
+	resp, err := client.LookupNFT(ctx, &pb.LookupNFTReq{
+		FromId: "CLI",
+		Key:    &pb.Key{Key: target},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// ====================== ENTRYPOINT ======================
+
+// LookupNFTOnNodeByNameAlpha: orchestratore della lookup iterativa α-parallela.
+func LookupNFTOnNodeByNameAlpha(startNode string, reverse []Pair, nftName string, alpha int, maxRounds int) (round int, found bool, err error) {
+	// parametri
 	if alpha <= 0 {
 		alpha = 3
 	}
@@ -218,147 +199,27 @@ func LookupNFTOnNodeByNameAlpha(startNode string, str []Pair, nftName string, al
 		K = 20
 	}
 
-	target := common.Sha1ID(nftName) // 20 byte
+	// target = SHA1(nftName)
+	target := common.Sha1ID(nftName)
 
-	// ---- util ----
-	xor := func(a, b []byte) []byte {
-		out := make([]byte, len(a))
-		for i := range a {
-			out[i] = a[i] ^ b[i]
-		}
-		return out
-	}
-	type cand struct {
-		idHex string
-		addr  string
-		label string
-		dist  []byte // XOR(target, peerID)
-	}
-	idsInShort := map[string]bool{}
-	short := make([]cand, 0, 64)
-
-	sortShort := func() {
-		sort.Slice(short, func(i, j int) bool {
-			if c := bytes.Compare(short[i].dist, short[j].dist); c != 0 {
-				return c < 0
-			}
-			return short[i].idHex < short[j].idHex
-		})
-	}
-	trimToK := func() {
-		if len(short) > K {
-			short = short[:K]
-		}
-	}
-	getClosest := func() []byte {
-		if len(short) == 0 {
-			return nil
-		}
-		return short[0].dist
-	}
-
-	// costruisci candidati da pb.Node → usa reverse-map se host:port non sono popolati
-	buildFromNearest := func(nearest []*pb.Node, skipID string) []cand {
-		out := make([]cand, 0, len(nearest))
-		for _, n := range nearest {
-			id := strings.ToLower(strings.TrimSpace(n.GetId()))
-			if len(id) != 40 || id == skipID || idsInShort[id] {
-				continue
-			}
-
-			var addr, label string
-			host := strings.TrimSpace(n.GetHost())
-			port := int(n.GetPort())
-			if host != "" && port > 0 {
-				addr = fmt.Sprintf("%s:%d", host, port)
-				label = host
-			} else {
-				if name := Check(id, str); name != "NOTFOUND" {
-					if hp, e := ResolveStartHostPort(name); e == nil && hp != "" {
-						addr = hp
-						label = name
-					}
-				}
-			}
-			if addr == "" {
-				continue
-			}
-			if label == "" {
-				if host != "" {
-					label = host
-				} else if len(id) >= 8 {
-					label = id[:8]
-				} else {
-					label = id
-				}
-			}
-
-			idBytes, err := hex.DecodeString(id)
-			if err != nil || len(idBytes) != len(target) {
-				continue
-			}
-
-			out = append(out, cand{
-				idHex: id,
-				addr:  addr,
-				label: label,
-				dist:  xor(target, idBytes),
-			})
-		}
-		return out
-	}
-
-	mergeIntoShort := func(add []cand) (added int) {
-		for _, c := range add {
-			if idsInShort[c.idHex] {
-				continue
-			}
-			idsInShort[c.idHex] = true
-			short = append(short, c)
-			added++
-		}
-		if added > 0 {
-			sortShort()
-			trimToK()
-		}
-		return added
-	}
-
-	takeTopUnqueried := func(queried map[string]bool, k int) []cand {
-		out := make([]cand, 0, k)
-		for _, c := range short {
-			if len(out) >= k {
-				break
-			}
-			if queried[c.idHex] {
-				continue
-			}
-			out = append(out, c)
-		}
-		return out
-	}
-
-	// ---- Hop 1: nodo di partenza ----
+	// risoluzione nodo di partenza
 	hostPort, e := ResolveStartHostPort(startNode)
 	if e != nil || hostPort == "" {
 		return 0, false, fmt.Errorf("risoluzione %q fallita: %w", startNode, e)
 	}
 	selfHex := strings.ToLower(hex.EncodeToString(common.Sha1ID(startNode)))
 
+	// strutture per la shortlist
+	short := make([]cand, 0, 64)
+	idsInShort := map[string]bool{}
+	queried := map[string]bool{selfHex: true}
+
+	// --- Hop 1: chiedi al nodo di partenza ---
 	fmt.Printf("🔎 Hop 1: cerco '%s' su %s (%s)\n", nftName, startNode, hostPort)
 	{
-		conn, err := grpc.Dial(hostPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return 0, false, fmt.Errorf("dial %s: %w", hostPort, err)
-		}
-		client := pb.NewKademliaClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		resp, rpcErr := client.LookupNFT(ctx, &pb.LookupNFTReq{
-			FromId: "CLI",
-			Key:    &pb.Key{Key: target},
-		})
+		resp, rpcErr := rpcLookup(ctx, hostPort, target)
 		cancel()
-		_ = conn.Close()
 		if rpcErr != nil {
 			return 0, false, fmt.Errorf("RPC su %s: %w", startNode, rpcErr)
 		}
@@ -367,15 +228,15 @@ func LookupNFTOnNodeByNameAlpha(startNode string, str []Pair, nftName string, al
 			fmt.Printf("Contenuto JSON:\n%s\n", string(resp.GetValue().GetBytes()))
 			return 1, true, nil
 		}
-		_ = mergeIntoShort(buildFromNearest(resp.GetNearest(), selfHex))
+		add := buildFromNearest(resp.GetNearest(), selfHex, reverse, target)
+		short, _ = mergeIntoShort(short, add, K, idsInShort)
 	}
 
-	queried := map[string]bool{selfHex: true}
-	prevClosest := getClosest()
+	prevClosest := getClosest(short)
 
-	// ---- Round successivi (α in parallelo) ----
+	// --- Round successivi (α-parallel) ---
 	for round = 2; round <= maxRounds; round++ {
-		next := takeTopUnqueried(queried, alpha)
+		next := takeTopUnqueried(short, queried, alpha)
 		if len(next) == 0 {
 			fmt.Printf("✖ non trovato dopo %d round (α=%d)\n", round-1, alpha)
 			return round - 1, false, nil
@@ -399,21 +260,12 @@ func LookupNFTOnNodeByNameAlpha(startNode string, str []Pair, nftName string, al
 		}
 		out := make(chan result, len(next))
 
+		// lancia α RPC in parallelo
 		for _, c := range next {
 			go func(c cand) {
-				conn, err := grpc.Dial(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-				if err != nil {
-					out <- result{err: fmt.Errorf("dial %s: %w", c.addr, err)}
-					return
-				}
-				client := pb.NewKademliaClient(conn)
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				resp, rpcErr := client.LookupNFT(ctx, &pb.LookupNFTReq{
-					FromId: "CLI",
-					Key:    &pb.Key{Key: target},
-				})
-				cancel()
-				_ = conn.Close()
+				defer cancel()
+				resp, rpcErr := rpcLookup(ctx, c.addr, target)
 				if rpcErr != nil {
 					out <- result{err: rpcErr}
 					return
@@ -438,160 +290,25 @@ func LookupNFTOnNodeByNameAlpha(startNode string, str []Pair, nftName string, al
 				fmt.Printf("Contenuto JSON:\n%s\n", string(r.value))
 				return round, true, nil
 			}
-			addedAny += mergeIntoShort(buildFromNearest(r.nearest, selfHex))
+			add := buildFromNearest(r.nearest, selfHex, reverse, target)
+			short, _ = mergeIntoShort(short, add, K, idsInShort)
+			addedAny += len(add)
 		}
 
-		// criterio "no progress": confronta il closest
-		newClosest := getClosest()
+		// stop condizione: nessun miglioramento del più vicino
+		newClosest := getClosest(short)
 		progress := (prevClosest == nil) || (newClosest != nil && bytes.Compare(newClosest, prevClosest) < 0)
 		prevClosest = newClosest
 
-		if !progress {
-			// se nessun nuovo candidato e nessun non-interrogato → stop
-			if addedAny == 0 {
-				future := takeTopUnqueried(queried, alpha)
-				if len(future) == 0 {
-					fmt.Println("ℹ️ Nessun progresso e nessun non-interrogato — stop.")
-					return round, false, nil
-				}
+		if !progress && addedAny == 0 {
+			future := takeTopUnqueried(short, queried, alpha)
+			if len(future) == 0 {
+				fmt.Println("ℹ️ Nessun progresso e nessun non-interrogato — stop.")
+				return round, false, nil
 			}
 		}
 	}
 
 	fmt.Printf("⛔ limite di round (%d) raggiunto, non trovato.\n", maxRounds)
 	return maxRounds, false, nil
-}
-
-// ---- helper types & funzioni ----
-
-type candidate struct {
-	idHex   string
-	addr    string // host:port
-	label   string
-	dist    []byte // XOR distance
-	queried bool
-}
-
-func xorDistToTarget(target []byte, idHex string) []byte {
-	idHex = strings.ToLower(strings.TrimSpace(idHex))
-	b, err := hex.DecodeString(idHex)
-	if err != nil || len(b) != len(target) {
-		return nil
-	}
-	out := make([]byte, len(target))
-	for i := range target {
-		out[i] = target[i] ^ b[i]
-	}
-	return out
-}
-
-// converte una lista di pb.Node in candidati, risolvendo host:port (usa fallback via ui.Check)
-func nodesToCands(target []byte, nodes []*pb.Node, str []Pair) []candidate {
-	cands := make([]candidate, 0, len(nodes))
-	for _, n := range nodes {
-		id := strings.ToLower(strings.TrimSpace(n.GetId()))
-		if id == "" {
-			continue
-		}
-
-		var addr, label string
-		host := strings.TrimSpace(n.GetHost())
-		port := int(n.GetPort())
-		if host != "" && port > 0 {
-			addr = fmt.Sprintf("%s:%d", host, port)
-			label = host
-		} else {
-			if name := Check(id, str); name != "NOTFOUND" {
-				if hp, e := ResolveStartHostPort(name); e == nil {
-					addr = hp
-					label = name
-				}
-			}
-		}
-		if addr == "" {
-			// non usabile per RPC
-			continue
-		}
-		if label == "" {
-			if host != "" {
-				label = host
-			} else if len(id) >= 8 {
-				label = id[:8]
-			} else {
-				label = id
-			}
-		}
-		dist := xorDistToTarget(target, id)
-		if dist == nil {
-			continue
-		}
-		cands = append(cands, candidate{idHex: id, addr: addr, label: label, dist: dist})
-	}
-	return cands
-}
-
-// inizializza la shortlist ordinata per distanza (dedup per idHex)
-func buildShortlist(target []byte, nodes []*pb.Node, str []Pair) ([]candidate, []byte) {
-	m := map[string]candidate{}
-	for _, c := range nodesToCands(target, nodes, str) {
-		if old, ok := m[c.idHex]; !ok || bytes.Compare(c.dist, old.dist) < 0 {
-			m[c.idHex] = c
-		}
-	}
-	short := make([]candidate, 0, len(m))
-	for _, c := range m {
-		short = append(short, c)
-	}
-	sort.Slice(short, func(i, j int) bool { return bytes.Compare(short[i].dist, short[j].dist) < 0 })
-	var best []byte
-	if len(short) > 0 {
-		best = append([]byte(nil), short[0].dist...)
-	}
-	return short, best
-}
-
-// merge di nuovi nearest nella shortlist esistente, mantenendo l’ordinamento per distanza.
-// Ritorna: quanti aggiunti, e la nuova best distance.
-func mergeIntoShortlist(target []byte, short *[]candidate, nodes []*pb.Node, str []Pair) (int, []byte) {
-	// porta *short in mappa per dedup
-	m := map[string]candidate{}
-	for _, c := range *short {
-		m[c.idHex] = c
-	}
-
-	added := 0
-	for _, c := range nodesToCands(target, nodes, str) {
-		if old, ok := m[c.idHex]; !ok || bytes.Compare(c.dist, old.dist) < 0 {
-			m[c.idHex] = c
-			added++
-		}
-	}
-	// ricostruisci slice ordinata
-	newShort := make([]candidate, 0, len(m))
-	for _, c := range m {
-		newShort = append(newShort, c)
-	}
-	sort.Slice(newShort, func(i, j int) bool { return bytes.Compare(newShort[i].dist, newShort[j].dist) < 0 })
-	*short = newShort
-
-	var best []byte
-	if len(newShort) > 0 {
-		best = newShort[0].dist
-	}
-	return added, best
-}
-
-// prende i primi α non ancora interrogati
-func takeTopUnqueried(short []candidate, queried map[string]bool, alpha int) []candidate {
-	out := make([]candidate, 0, alpha)
-	for _, c := range short {
-		if len(out) >= alpha {
-			break
-		}
-		if queried[c.idHex] {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
 }

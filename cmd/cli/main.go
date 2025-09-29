@@ -114,7 +114,7 @@ func main() {
 			log.Fatal("Errore Reverse2:", err)
 		}
 		//fmt.Printf("Nodi: %v\n", out)
-		rounds, found, err := ui.LookupNFTOnNodeByNameAlpha(line, out, line1 /*maxRounds=*/, 30 /*alpha=*/, 3)
+		rounds, found, err := ui.LookupNFTOnNodeByNameAlpha(line, out, line1, 2, 30)
 		if err != nil { /* gestisci errore */
 		}
 		if found {

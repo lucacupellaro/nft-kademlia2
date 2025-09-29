@@ -2,13 +2,49 @@
   "self_node": "node14",
   "bucket_size": 3,
   "hash_bits": 160,
-  "saved_at": "2025-09-28T10:16:52Z",
+  "saved_at": "2025-09-29T15:49:27Z",
   "buckets": {
+    "146": [
+      {
+        "name": "node68",
+        "sha": "18be83616833f905eedfcc4c393dc6013059edb0",
+        "dist": "0004c97df484dda5b2990c97cf9b3394628241a7"
+      }
+    ],
+    "152": [
+      {
+        "name": "node95",
+        "sha": "194728d731dd6f7c84d6ba0e168afe45b479cefe",
+        "dist": "01fd62cbad6a4bdcd8907ad5e02c0bd0e6a262e9"
+      }
+    ],
+    "154": [
+      {
+        "name": "node72",
+        "sha": "1d310b103b35834cda05d619fea4b1e148f3aeb4",
+        "dist": "058b410ca782a7ec864316c2080244741a2802a3"
+      },
+      {
+        "name": "node75",
+        "sha": "1d813d99f815775a5671356b6a12b8ef9ca99c62",
+        "dist": "053b778564a253fa0a37f5b09cb44d7ace723075"
+      }
+    ],
     "155": [
       {
         "name": "node28",
         "sha": "1207716b0643115ee89297bb533427d4deb94690",
         "dist": "0abd3b779af435feb4d45760a592d2418c62ea87"
+      },
+      {
+        "name": "node64",
+        "sha": "16709c7dca176a1d4df038938d43246300337347",
+        "dist": "0ecad66156a04ebd11b6f8487be5d1f652e8df50"
+      },
+      {
+        "name": "node78",
+        "sha": "1090baa656956145ec6f952f410ebcdb41aa72a0",
+        "dist": "082af0baca2245e5b02955f4b7a8494e1371deb7"
       }
     ],
     "156": [
@@ -33,6 +69,16 @@
         "name": "node2",
         "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
         "dist": "35050eba17c095fba61d030d9a317cbf059b87a9"
+      },
+      {
+        "name": "node31",
+        "sha": "3103c6adc80e083492ebc289d5d1323d88ecb883",
+        "dist": "29b98cb154b92c94cead02522377c7a8da371494"
+      },
+      {
+        "name": "node37",
+        "sha": "378c97edb03cf6d2fb992c4efb1ac740f336ac2c",
+        "dist": "2f36ddf12c8bd272a7dfec950dbc32d5a1ed003b"
       }
     ],
     "158": [
@@ -70,5 +116,5 @@
       }
     ]
   },
-  "non_empty_buckets": 5
+  "non_empty_buckets": 8
 }

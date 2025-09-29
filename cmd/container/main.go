@@ -57,13 +57,7 @@ func main() {
 			colName = append(colName, row[1])
 		}
 
-		fmt.Printf("NFT 0z %s\n", colName[0])
-
 		listNFTId := logica.GenerateBytesOfAllNftsSHA1(colName)
-		fmt.Printf("Primo NFT: %s\n", colName[0])
-		fmt.Printf("Primo ID  : %x\n", listNFTId[0])
-
-		fmt.Printf("NFT id %x:\n", listNFTId[0])
 
 		// recuper gli ID dei container
 		rawNodes := os.Getenv("NODES")

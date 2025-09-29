@@ -20,3 +20,6 @@ sudo docker system prune -a --volumes -f
 //elimniare su bind mount ma solo sulla cartelal deoi container, sudo find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 
 //  docker compose logs -f node6
+
+//per vedere se la ricerca viene fatta bene di ogni nodo con setup fisso 
+go run cmd/bench_lookup/main.go   -csv csv/NFT_Top_Collections.csv   -alpha 3   -maxhops 30   -bucketFrom 3   -bucketTo 3   -noRebuild

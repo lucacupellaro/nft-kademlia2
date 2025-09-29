@@ -1,0 +1,144 @@
+{
+  "self_node": "node118",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-29T15:49:26Z",
+  "buckets": {
+    "150": [
+      {
+        "name": "node121",
+        "sha": "db1ae139d96d58b518975b322edaf46b02174a00",
+        "dist": "00524feceae6c09c886818ccc1c0dc7b3a0619a2"
+      }
+    ],
+    "151": [
+      {
+        "name": "node83",
+        "sha": "db9c3bc2bd522d2ef6886030c43c294755db66eb",
+        "dist": "00d495178ed9b507667723ce2b2601576dca3549"
+      }
+    ],
+    "152": [
+      {
+        "name": "node34",
+        "sha": "dacccaeeda8dd74209f2cfdd6b3d6b8a2c21f809",
+        "dist": "0184643be9064f6b990d8c238427439a1430abab"
+      }
+    ],
+    "153": [
+      {
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": "03c455024fda3153e7f665a8ffc49c75630cc8d1"
+      },
+      {
+        "name": "node76",
+        "sha": "d915967cecf89f3f08124cc409065992bba18536",
+        "dist": "025d38a9df73071698ed0f3ae61c718283b0d694"
+      },
+      {
+        "name": "node114",
+        "sha": "d9ed41dd9cba74881a91612a8910e21189094e90",
+        "dist": "02a5ef08af31eca18a6e22d4660aca01b1181d32"
+      }
+    ],
+    "154": [
+      {
+        "name": "node30",
+        "sha": "dfaa57648a8beea08520461876334a51dc2da66f",
+        "dist": "04e2f9b1b900768915df05e699296241e43cf5cd"
+      },
+      {
+        "name": "node49",
+        "sha": "dfdf05e013f8237aa50f9df2f533dff69e60162f",
+        "dist": "0497ab352073bb5335f0de0c1a29f7e6a671458d"
+      },
+      {
+        "name": "node74",
+        "sha": "dd2aa64e88f41211de6843cea599e84da6e6e686",
+        "dist": "0662089bbb7f8a384e9700304a83c05d9ef7b524"
+      }
+    ],
+    "155": [
+      {
+        "name": "node32",
+        "sha": "d329117b694b55ff8dd12055edcf6d65f452a258",
+        "dist": "0861bfae5ac0cdd61d2e63ab02d54575cc43f1fa"
+      },
+      {
+        "name": "node124",
+        "sha": "d60e6f83476be4e0fdedd95571e1728b87de94dc",
+        "dist": "0d46c15674e07cc96d129aab9efb5a9bbfcfc77e"
+      }
+    ],
+    "156": [
+      {
+        "name": "node7",
+        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
+        "dist": "1b76fb0465893b10b27acd6989548b2f0e9fa67c"
+      },
+      {
+        "name": "node8",
+        "sha": "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
+        "dist": "1d132854976559fd8be4e24efc49770caec81009"
+      },
+      {
+        "name": "node18",
+        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "dist": "1840d93529144c8bfe74da4ddfaa8a6d96748e67"
+      }
+    ],
+    "157": [
+      {
+        "name": "node16",
+        "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
+        "dist": "37cb16ba4ce45813ce903acb33f3d09c206a04f7"
+      },
+      {
+        "name": "node48",
+        "sha": "e4d172651d59a5b88ba1b63de40a7b00e769ef2e",
+        "dist": "3f99dcb02ed23d911b5ef5c30b105310df78bc8c"
+      },
+      {
+        "name": "node61",
+        "sha": "e072709a4873660e98a2ef9b28924b430208f170",
+        "dist": "3b3ade4f7bf8fe27085dac65c78863533a19a2d2"
+      }
+    ],
+    "158": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "7f274e11e93bdd16cd79fd28cf7a689837486a9c"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "46ebabec9cbda1ef90396691998b5d1a600d6560"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "6bee35caac63b545846e3a30a7f8078cbc00fc41"
+      }
+    ],
+    "159": [
+      {
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
+        "dist": "f6f7ea73b8fc29726aa48028838da13a6f51781c"
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "afad0a6998f8cd915a489c8d3f6d6fddbdd87645"
+      },
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "dccd8690b564c03928fa23cf71e86178d086a46c"
+      }
+    ]
+  },
+  "non_empty_buckets": 10
+}

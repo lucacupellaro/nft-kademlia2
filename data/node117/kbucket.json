@@ -1,0 +1,120 @@
+{
+  "self_node": "node117",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-09-29T15:49:25Z",
+  "buckets": {
+    "152": [
+      {
+        "name": "node18",
+        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "dist": "011a9e83557874fee96ac2099c8d7ce362f8df03"
+      }
+    ],
+    "153": [
+      {
+        "name": "node7",
+        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
+        "dist": "022cbcb219e50365a564d52dca737da1fa13f718"
+      }
+    ],
+    "154": [
+      {
+        "name": "node8",
+        "sha": "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
+        "dist": "04496fe2eb0961889cfafa0abf6e81825a44416d"
+      },
+      {
+        "name": "node52",
+        "sha": "c54fe2523d1ccb76e1938d27e828b73975079833",
+        "dist": "075d0b3172fb6b2a6672d69d441569a7b99a9af5"
+      }
+    ],
+    "155": [
+      {
+        "name": "node36",
+        "sha": "cf58cc618fd85f3ce3f17842203581dbfb5409a6",
+        "dist": "0d4a2502c03fff60641023f88c085f4537c90b60"
+      },
+      {
+        "name": "node90",
+        "sha": "cc6330ce67616fc3068ad680212ee0cbba259b62",
+        "dist": "0e71d9ad2886cf9f816b8d3a8d133e5576b899a4"
+      },
+      {
+        "name": "node97",
+        "sha": "ceeb9b765eb8d44511491b43d347b82649b3379a",
+        "dist": "0cf97215115f741996a840f97f7a66b8852e355c"
+      }
+    ],
+    "156": [
+      {
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": "1a9e12b433b60926f0e87decbce36afb978099b5"
+      },
+      {
+        "name": "node30",
+        "sha": "dfaa57648a8beea08520461876334a51dc2da66f",
+        "dist": "1db8be07c56c4efc02c11da2da0e94cf10b0a4a9"
+      },
+      {
+        "name": "node32",
+        "sha": "d329117b694b55ff8dd12055edcf6d65f452a258",
+        "dist": "113bf81826acf5a30a307bef41f2b3fb38cfa09e"
+      }
+    ],
+    "157": [
+      {
+        "name": "node16",
+        "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
+        "dist": "2e91510c30886066d98e228f70d42612d4e65593"
+      },
+      {
+        "name": "node48",
+        "sha": "e4d172651d59a5b88ba1b63de40a7b00e769ef2e",
+        "dist": "26c39b0652be05e40c40ed874837a59e2bf4ede8"
+      },
+      {
+        "name": "node61",
+        "sha": "e072709a4873660e98a2ef9b28924b430208f170",
+        "dist": "226099f90794c6521f43b42184af95ddce95f3b6"
+      }
+    ],
+    "158": [
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": "667d09a79557e563da67e56c8c5d9e16c3c43bf8"
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": "5fb1ec5ae0d1999a87277ed5daacab9494813404"
+      },
+      {
+        "name": "node5",
+        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
+        "dist": "72b4727cd00f8d3093702274e4dff102488cad25"
+      }
+    ],
+    "159": [
+      {
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
+        "dist": "efadadc5c49011077dba986cc0aa57b49bdd2978"
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": "b6f74ddfe494f5e44d5684c97c4a995349542721"
+      },
+      {
+        "name": "node9",
+        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
+        "dist": "c597c126c908f84c3fe43b8b32cf97f6240af508"
+      }
+    ]
+  },
+  "non_empty_buckets": 8
+}

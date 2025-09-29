@@ -52,7 +52,7 @@ type RunStats struct {
 // ------------------------------------------------------------
 
 func main() {
-	a := 5
+	a := 1
 	if a == 3 {
 		// carica i nomi NFT
 		names, err := readNames(csvNFT)
@@ -88,6 +88,7 @@ func main() {
 		return
 	}
 	if a == 1 {
+		//test per variare N con alpha e k fissi e vedere l'andamento degli hop medi
 		names, err := readNames(csvNFT)
 		if err != nil {
 			log.Fatalf("Errore lettura CSV NFT: %v", err)
@@ -104,16 +105,16 @@ func main() {
 		w := csv.NewWriter(f)
 		defer w.Flush()
 
-		// header
-		_ = w.Write([]string{"iterazione", "numero_nodi", "kbucket", "nHops_medio", "stdHops", "NFT_trovati", "NFT_non_trovati"})
+		_ = w.Write([]string{"iterazione", "numero_nodi", "kbucket", "nHops_medio", "stdHops", "maxHops", "NFT_trovati", "NFT_non_trovati"})
 		w.Flush()
 
 		iter := 0
-		for N := 10; N <= 20; N++ {
+		for N := 100; N <= 200; N = N + 5 {
 			iter++
-			kb := N/2 + 2
+			kb := 3
+			alpha := 3
 
-			fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d ===\n", iter, N, kb)
+			fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d, α=%d ===\n", iter, N, kb, alpha)
 
 			// aggiorna .env
 			if err := setEnvVar(defaultEnvPath, "N", strconv.Itoa(N)); err != nil {
@@ -158,7 +159,7 @@ func main() {
 			for i, name := range names {
 				start := test.RandomNode(nodes)
 				// usa α=3 di default qui
-				alpha := firstInt(os.Getenv("ALPHA"), 3)
+
 				h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
 				if err != nil || !found {
 					nonTrovati++
@@ -171,12 +172,20 @@ func main() {
 
 			mean, std := test.MeanStd(hops)
 
+			maxHop := 0
+			for _, v := range hops {
+				if v > maxHop {
+					maxHop = v
+				}
+			}
+
 			_ = w.Write([]string{
 				strconv.Itoa(iter),
 				strconv.Itoa(N),
 				strconv.Itoa(kb),
 				fmt.Sprintf("%.4f", mean),
 				fmt.Sprintf("%.4f", std),
+				strconv.Itoa(maxHop),
 				strconv.Itoa(trovati),
 				strconv.Itoa(nonTrovati),
 			})
@@ -188,40 +197,28 @@ func main() {
 		fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
 
 	} else {
-		// ---- Branch con flag ----
+
+		//test per cercare tutti gli nft
+		// test statico: cerca tutti gli NFT del dataset con configurazione presa dall'env, senza toccare .env e senza rebuild
 
 		csvPath := flag.String("csv", "", "Percorso CSV con colonna Name (obbligatorio)")
 		envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
-
-		// file dettagli (per-run). Viene sovrascritto ad ogni iterazione
-		outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola iterazione (overwrite)")
-
-		// file riassunto multi-run
-		outSummary := flag.String("outSummary", defaultSummary, "Output CSV riassunto multi-run")
-
+		outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola run (overwrite)")
+		outSummary := flag.String("outSummary", defaultSummary, "Output CSV riassunto (append)")
 		maxHops := flag.Int("maxhops", maxHopsDefault, "Max hop per lookup")
-
-		bucketFrom := flag.Int("bucketFrom", 4, "Bucket size iniziale")
-		bucketTo := flag.Int("bucketTo", -1, "Bucket size finale (default: N dal .env)")
-
-		alphaFlag := flag.Int("alpha", 0, "Grado di parallelismo per round (alpha). Se 0, usa ALPHA dal .env o 3")
-
-		// se vuoi disattivare il rebuild each-iteration, passa -noRebuild
-		noRebuild := flag.Bool("noRebuild", false, "Se true NON ricostruisce i container ad ogni iterazione")
-
+		//alphaFlag := flag.Int("alpha", 0, "Grado di parallelismo per round (alpha). Se 0, usa ALPHA da .env o 3")
 		flag.Parse()
 
 		if *csvPath == "" {
 			log.Fatal("Devi specificare -csv /percorso/collections.csv (con colonna 'Name').")
 		}
 
-		// carica parametri da .env (N, BUCKET_SIZE, REPLICATION_FACTOR, ALPHA)
+		// 1) carica parametri da .env (N, BUCKET_SIZE, REPLICATION_FACTOR, ALPHA)
 		env := readEnvFile(*envPath)
 		N := firstInt(env["N"], 0)
-		currentBucket := firstInt(env["BUCKET_SIZE"], 0)
+		bucketSize := firstInt(env["BUCKET_SIZE"], 0)
 		repl := firstInt(env["REPLICATION_FACTOR"], 0)
-
-		alpha := *alphaFlag
+		alpha := 5
 		if alpha <= 0 {
 			alpha = firstInt(env["ALPHA"], 3)
 		}
@@ -229,21 +226,10 @@ func main() {
 			alpha = 3
 		}
 
-		// bucketTo default = N (se non dato)
-		if *bucketTo < 0 {
-			*bucketTo = N
-		}
-		if *bucketFrom <= 0 {
-			*bucketFrom = 4
-		}
-		if *bucketFrom > *bucketTo {
-			log.Fatalf("bucketFrom (%d) > bucketTo (%d)", *bucketFrom, *bucketTo)
-		}
-
-		// prepara cartella results
+		// 2) prepara cartella risultati
 		_ = os.MkdirAll("results", 0o755)
 
-		// apri il CSV di riassunto (append se già esiste, altrimenti crea e scrive header)
+		// 3) apri/crea summary (append, con header se nuovo)
 		summaryExists := fileExists(*outSummary)
 		sumF, err := os.OpenFile(*outSummary, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err != nil {
@@ -252,7 +238,6 @@ func main() {
 		defer sumF.Close()
 		sumW := csv.NewWriter(sumF)
 		defer sumW.Flush()
-
 		if !summaryExists {
 			_ = sumW.Write([]string{
 				"iterazione",
@@ -264,11 +249,12 @@ func main() {
 				"NODI",
 				"BUCKETSIZE",
 				"FATTORE DI REPLICAZIONI",
+				"ALPHA",
 			})
 			sumW.Flush()
 		}
 
-		// leggi i Name dal CSV di input
+		// 4) leggi i Name dal CSV
 		names, err := readNames(*csvPath)
 		if err != nil {
 			log.Fatalf("Errore lettura CSV input: %v", err)
@@ -277,73 +263,120 @@ func main() {
 			log.Fatalf("Nel CSV %s non ho trovato la colonna 'Name' con valori.", *csvPath)
 		}
 
-		rand.Seed(time.Now().UnixNano())
-
-		iteration := 0
-		for b := *bucketFrom; b <= *bucketTo; b++ {
-			iteration++
-
-			// 0) aggiorna BUCKET_SIZE nel .env
-			if err := setEnvVar(*envPath, "BUCKET_SIZE", strconv.Itoa(b)); err != nil {
-				log.Printf("⚠️ impossibile aggiornare BUCKET_SIZE nel .env: %v", err)
-			} else {
-				currentBucket = b
-			}
-
-			// 1) rebuild cluster (se non disattivato)
-			if !*noRebuild {
-				log.Printf("🔧 Iter %d — docker compose up -d --build --force-recreate (K=%d)...", iteration, b)
-				if out, err := composeUpBuild(composeProject); err != nil {
-					log.Fatalf("docker compose up --build fallito: %v\n%s", err, out)
-				} else if strings.TrimSpace(out) != "" {
-					fmt.Print(out)
-				}
-			}
-
-			// 2) ricarica lista nodi attivi e reverse map
-			nodes, err := ui.ListActiveComposeServices(composeProject)
-			if err != nil {
-				log.Fatalf("Errore recupero nodi: %v", err)
-			}
-			if len(nodes) == 0 {
-				log.Fatal("Nessun nodo attivo trovato dopo il rebuild.")
-			}
-			reverse, err := ui.Reverse2(nodes)
-			if err != nil {
-				log.Fatalf("Errore Reverse2: %v", err)
-			}
-
-			// 3) attesa readiness dei servizi (porta gRPC raggiungibile)
-			if err := waitClusterReady(nodes, waitReadyMax); err != nil {
-				log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
-			}
-
-			// 4) esegui la run completa (dettaglio per NFT)
-			stats, err := oneRun(names, nodes, reverse, *outCSV, *maxHops, N, currentBucket, repl, alpha)
-			if err != nil {
-				log.Fatalf("Errore run (bucket=%d): %v", b, err)
-			}
-			stats.Iteration = iteration
-
-			// 5) scrivi riga riassuntiva
-			_ = sumW.Write([]string{
-				strconv.Itoa(stats.Iteration),
-				strconv.Itoa(stats.TotalNFTs),
-				strconv.Itoa(stats.NotFound),
-				fmt.Sprintf("%.6f", stats.AvgHops),
-				strconv.Itoa(stats.Found),
-				strconv.Itoa(stats.MaxHops),
-				strconv.Itoa(stats.NNodes),
-				strconv.Itoa(stats.BucketSize),
-				strconv.Itoa(stats.ReplFactor),
-			})
-			sumW.Flush()
-
-			fmt.Printf("✅ Iterazione %d (BUCKET_SIZE=%d, α=%d): trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d\n",
-				stats.Iteration, b, alpha, stats.Found, stats.NotFound, stats.AvgHops, stats.MaxHops)
+		// 5) scopri nodi attivi e reverse map (nessun rebuild)
+		nodes, err := ui.ListActiveComposeServices(composeProject)
+		if err != nil {
+			log.Fatalf("Errore recupero nodi: %v", err)
+		}
+		if len(nodes) == 0 {
+			log.Fatal("Nessun nodo attivo trovato. Avvia prima il cluster.")
+		}
+		reverse, err := ui.Reverse2(nodes)
+		if err != nil {
+			log.Fatalf("Errore Reverse2: %v", err)
 		}
 
-		fmt.Printf("🏁 Completato. Riassunto: %s\n", *outSummary)
+		// 6) attesa readiness dei servizi gRPC
+		if err := waitClusterReady(nodes, waitReadyMax); err != nil {
+			log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
+		}
+
+		// 7) apri CSV dettagli (overwrite per questa run)
+		if err := os.MkdirAll(filepath.Dir(*outCSV), 0o755); err != nil {
+			log.Fatalf("Impossibile creare dir %s: %v", filepath.Dir(*outCSV), err)
+		}
+		outF, err := os.Create(*outCSV)
+		if err != nil {
+			log.Fatalf("Impossibile creare %s: %v", *outCSV, err)
+		}
+		defer outF.Close()
+		w := csv.NewWriter(outF)
+		defer w.Flush()
+
+		// header dettagli
+		_ = w.Write([]string{
+			"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha",
+		})
+		w.Flush()
+
+		// 8) run unica: cerca tutti gli NFT con config statica
+		rand.Seed(time.Now().UnixNano())
+
+		trovati := 0
+		nonTrovati := 0
+		hops := make([]int, 0, len(names))
+
+		for i, name := range names {
+			start := nodes[rand.Intn(len(nodes))] // scegli un nodo qualsiasi (se vuoi escludere node1, filtra prima)
+			fmt.Printf("[%d/%d] %s  (start=%s, α=%d)\n", i+1, len(names), name, start, alpha)
+
+			t0 := time.Now()
+			h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, *maxHops)
+			elapsed := time.Since(t0).Milliseconds()
+
+			if err != nil {
+				fmt.Printf("  ✖ errore lookup: %v\n", err)
+				_ = w.Write([]string{
+					start, name, "-1",
+					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+				})
+				w.Flush()
+				nonTrovati++
+				continue
+			}
+
+			if !found {
+				fmt.Println("  ✖ non trovato")
+				_ = w.Write([]string{
+					start, name, "-1",
+					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+				})
+				w.Flush()
+				nonTrovati++
+			} else {
+				fmt.Printf("  ✅ trovato in %d hop, %d ms\n", h, elapsed)
+				_ = w.Write([]string{
+					start, name, strconv.Itoa(h),
+					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+				})
+				w.Flush()
+
+				trovati++
+				hops = append(hops, h)
+			}
+		}
+
+		// 9) statistiche e summary (iterazione singola = 1)
+		mean, std := test.MeanStd(hops)
+		fmt.Printf("  📊 statistiche: media_hop=%.3f, std_hop=%.3f\n", mean, std)
+		maxHop := 0
+		for _, v := range hops {
+			if v > maxHop {
+				maxHop = v
+			}
+		}
+		iter := 1
+
+		_ = sumW.Write([]string{
+			strconv.Itoa(iter),
+			strconv.Itoa(len(names)),
+			strconv.Itoa(nonTrovati),
+			fmt.Sprintf("%.6f", mean),
+			strconv.Itoa(trovati),
+			strconv.Itoa(maxHop),
+			strconv.Itoa(N),
+			strconv.Itoa(bucketSize),
+			strconv.Itoa(repl),
+			strconv.Itoa(alpha),
+		})
+		sumW.Flush()
+
+		fmt.Printf("✅ Run statica completata — trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d (N=%d, K=%d, repl=%d, α=%d)\n",
+			trovati, nonTrovati, mean, maxHop, N, bucketSize, repl, alpha)
+
 	}
 }
 
