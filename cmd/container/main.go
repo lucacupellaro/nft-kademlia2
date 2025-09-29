@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"kademlia-nft/common"
 	"kademlia-nft/logica"
 	"log"
 	"os"
@@ -184,7 +184,7 @@ func main() {
 		if nodeID == "" {
 			log.Fatalf("NODE_ID non impostato")
 		}
-		selfSHA := common.Sha1ID(nodeID)
+		//selfSHA := common.Sha1ID(nodeID)
 
 		bucketSize := logica.RequireIntEnv("BUCKET_SIZE", 4)
 		if bucketSize <= 0 {
@@ -229,36 +229,26 @@ func main() {
 
 		// ------------------- Costruzione routing table con capienza bucket K e salvataggio -------------------
 
-		const m = 160 // SHA-1 -> 160 bit
-
-		// buckets: indice bucket (int) -> lista nomi peer ([]string)
-		buckets := make(map[int][]string, m)
-
-		// Popola i bucket rispettando la capienza K (bucketSize)
-		for _, peerName := range nodes {
-			peerSHA := common.Sha1ID(peerName)
-			idx, err := common.MSBIndex(selfSHA, peerSHA)
-			if err != nil || idx < 0 || idx >= m {
-				continue
-			}
-
-			// Inserisci solo se il bucket non è pieno
-			if len(buckets[idx]) < bucketSize {
-				buckets[idx] = append(buckets[idx], peerName)
-
-			} else {
-				// bucket pieno → drop (per LRU: ping del più vecchio e rimpiazzo se non risponde)
-			}
-		}
-
-		// Salvataggio in JSON sui faile kbuckets.json
 		kbPath := filepath.Join(dataDir, "kbucket.json")
-		if err := logica.SaveRoutingTableJSON(nodeID, selfSHA, bucketSize, buckets, kbPath); err != nil {
-			log.Fatalf("Errore salvataggio K-bucket: %v", err)
+		logica.SetKBucketGlobals(kbPath, bucketSize)
+
+		if err := logica.EnsureKBucketFile(kbPath, nodeID); err != nil {
+			log.Fatalf("Init kbucket.json: %v", err)
 		}
 
-		log.Printf("[bootstrap %s] routing table salvata in %s — bucketSize=%d, bucket non vuoti=%d",
-			nodeID, kbPath, bucketSize, len(buckets))
+		// Bootstrap + espansione (ping → find_node → ping mirato)
+		alpha := logica.RequireIntEnv("ALPHA", 2)
+		seedSample := 2 * bucketSize
+		iters := logica.RequireIntEnv("JOIN_ITERS", 2)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		if err := logica.JoinAndExpandLite(ctx, "node1:8000", nodeID, alpha, seedSample, iters); err != nil {
+			log.Printf("[bootstrap %s] JoinAndExpandLite warning: %v", nodeID, err)
+		}
+
+		log.Printf("[bootstrap %s] join completato ✅", nodeID)
 
 		select {} // blocca per sempre
 

@@ -1,120 +1,60 @@
 {
   "self_node": "node3",
-  "bucket_size": 3,
+  "bucket_size": 8,
   "hash_bits": 160,
-  "saved_at": "2025-09-29T15:49:26Z",
+  "saved_at": "2025-09-29T20:30:28Z",
   "buckets": {
-    "150": [
-      {
-        "name": "node12",
-        "sha": "a41fa335f502d279361dc89b8a4bd0618c27bf83",
-        "dist": "007043f12fb297466b9b764daa2b90e9837e86bd"
-      }
-    ],
-    "151": [
-      {
-        "name": "node65",
-        "sha": "a4f0d28caf8f83aecc4fc3c1116824a86b5adcb2",
-        "dist": "009f3248753fc69191c97d17310864206403e58c"
-      }
-    ],
-    "153": [
-      {
-        "name": "node62",
-        "sha": "a6e5c146d00323e8d44c01b82d6c4902b36ce57d",
-        "dist": "028a21820ab366d789cabf6e0d0c098abc35dc43"
-      },
-      {
-        "name": "node113",
-        "sha": "a61968dc62e03e90dd81293e45505851d23454f0",
-        "dist": "02768818b8507baf800797e8653018d9dd6d6dce"
-      }
-    ],
-    "155": [
-      {
-        "name": "node13",
-        "sha": "a845fafee582dfcb8afbd9ea5b8512e8dd9643b8",
-        "dist": "0c2a1a3a3f329af4d77d673c7be55260d2cf7a86"
-      },
-      {
-        "name": "node54",
-        "sha": "af2ce27b0603df025c0fd58e852e5808d5622320",
-        "dist": "0b4302bfdcb39a3d01896b58a54e1880da3b1a1e"
-      },
-      {
-        "name": "node77",
-        "sha": "a8c3b28d08762e096b20ae3434261888a22210df",
-        "dist": "0cac5249d2c66b3636a610e214465800ad7b29e1"
-      }
-    ],
-    "156": [
-      {
-        "name": "node5",
-        "sha": "b0a69b1f9fe82d6c149179ce48e22f9c8411afe3",
-        "dist": "14c97bdb455868534917c71868826f148b4896dd"
-      },
-      {
-        "name": "node11",
-        "sha": "b74c23615a95d95baac33b3b19bfd83ac320402f",
-        "dist": "1323c3a580259c64f74585ed39df98b2cc797911"
-      },
-      {
-        "name": "node27",
-        "sha": "b0bf0da25d98de006074feb5c09317ca1bb9d415",
-        "dist": "14d0ed6687289b3f3df24063e0f3574214e0ed2b"
-      }
-    ],
     "157": [
-      {
-        "name": "node4",
-        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
-        "dist": "39cce5fd75867cf95d409bb956f1358257450ffc"
-      },
       {
         "name": "node29",
         "sha": "8ba8e7efffbb3b1d225a2ef37c16c3a750bc629b",
-        "dist": "2fc7072b250b7e227fdc90255c76832f5fe55ba5"
-      },
-      {
-        "name": "node41",
-        "sha": "82411211c9f18b4619a136ae1397ceba2b8f6df8",
-        "dist": "262ef2d51341ce794427887833f78e3224d654c6"
+        "dist": ""
       }
     ],
     "158": [
       {
-        "name": "node7",
-        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
-        "dist": "6451b5158cb2e6067f033041462ee3b739d7cce0"
+        "name": "node34",
+        "sha": "dacccaeeda8dd74209f2cfdd6b3d6b8a2c21f809",
+        "dist": ""
       },
       {
-        "name": "node8",
-        "sha": "c65b8681a4eec1d41b1ba1b013535f1c96d943ab",
-        "dist": "623466457e5e84eb469d1f6633331f9499807a95"
+        "name": "node18",
+        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "dist": ""
       },
       {
         "name": "node16",
         "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
-        "dist": "48ec58aba5df850503e9c7e3fc89b80417226e6b"
+        "dist": ""
       }
     ],
     "159": [
       {
-        "name": "node2",
-        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
-        "dist": "89d0a46251c7f464a7dd7d004cf7c9a258191280"
+        "name": "node24",
+        "sha": "03e11eb6c268c30442d710ed4f0c07701120280b",
+        "dist": ""
       },
       {
-        "name": "node6",
-        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
-        "dist": "d08a447871c31087973161a5f01707458a901cd9"
+        "name": "node37",
+        "sha": "378c97edb03cf6d2fb992c4efb1ac740f336ac2c",
+        "dist": ""
       },
       {
-        "name": "node9",
-        "sha": "0785284586ef5810b80560319ef24968e897f7ce",
-        "dist": "a3eac8815c5f1d2fe583dee7be9209e0e7cecef0"
+        "name": "node38",
+        "sha": "444436dc67a021f1056c4457466d66780544da21",
+        "dist": ""
+      },
+      {
+        "name": "node22",
+        "sha": "7c729e3965ea85624b84fd12815e55e2f0f1c03d",
+        "dist": ""
+      },
+      {
+        "name": "CLI",
+        "sha": "700b401ca52b1bd3071dc838bf11be9cdb19fc5f",
+        "dist": ""
       }
     ]
   },
-  "non_empty_buckets": 8
+  "non_empty_buckets": 3
 }

@@ -52,7 +52,7 @@ type RunStats struct {
 // ------------------------------------------------------------
 
 func main() {
-	a := 1
+	a := 10
 	if a == 3 {
 		// carica i nomi NFT
 		names, err := readNames(csvNFT)
@@ -201,7 +201,7 @@ func main() {
 		//test per cercare tutti gli nft
 		// test statico: cerca tutti gli NFT del dataset con configurazione presa dall'env, senza toccare .env e senza rebuild
 
-		csvPath := flag.String("csv", "", "Percorso CSV con colonna Name (obbligatorio)")
+		csvPath := flag.String("csv", "", "/percorso/collections.csv")
 		envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
 		outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola run (overwrite)")
 		outSummary := flag.String("outSummary", defaultSummary, "Output CSV riassunto (append)")

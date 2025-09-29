@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gogo/protobuf/proto"
 
@@ -79,13 +78,10 @@ func (s *KademliaServer) Store(ctx context.Context, req *pb.StoreReq) (*pb.Store
 	return &pb.StoreRes{Ok: true}, nil
 }
 
-// ======================= SERVER SIDE =======================
-// RPC: LookupNFT (usa il NUOVO formato di kbucket.json)
 func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*pb.LookupNFTRes, error) {
 
-	// all'inizio di LookupNFT
 	if from := strings.TrimSpace(req.GetFromId()); from != "" {
-		if err := TouchContact(from); err != nil {
+		if err := TouchContactByName(from); err != nil {
 			log.Printf("[LookupNFT] TouchContact(%q) FAILED: %v", from, err)
 		}
 	}
@@ -131,21 +127,6 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 	if err != nil {
 		log.Printf("[SERVER %s] Nessun kbucket.json: %v", os.Getenv("NODE_ID"), err)
 		return &pb.LookupNFTRes{Found: false}, nil
-	}
-
-	// Strutture per il NUOVO formato
-	type PeerEntry struct {
-		Name string `json:"name"`
-		SHA  string `json:"sha"`  // 40 hex
-		Dist string `json:"dist"` // opzionale nel file; NON ci fidiamo: ricalcoliamo
-	}
-	type RoutingTableFile struct {
-		SelfNode        string                 `json:"self_node"`
-		BucketSize      int                    `json:"bucket_size"`
-		HashBits        int                    `json:"hash_bits"`
-		SavedAt         string                 `json:"saved_at"`
-		Buckets         map[string][]PeerEntry `json:"buckets"`
-		NonEmptyBuckets int                    `json:"non_empty_buckets"`
 	}
 
 	var rt RoutingTableFile
@@ -240,82 +221,47 @@ func (s *KademliaServer) GetKBucket(ctx context.Context, req *pb.GetKBucketReq) 
 	if dataDir == "" {
 		dataDir = "/data"
 	}
-
-	// --- 1) leggi kbucket.json ---
-	type kbucketFile struct {
-		NodeID    string   `json:"node_id"`
-		BucketHex []string `json:"bucket_hex"`
-		SavedAt   string   `json:"saved_at"`
-	}
 	kbPath := filepath.Join(dataDir, "kbucket.json")
 
-	raw, err := os.ReadFile(kbPath)
+	// lettura semplice: i writer usano saveRTAtomic (rename), quindi è safe
+	b, err := os.ReadFile(kbPath)
 	if err != nil {
-		return nil, fmt.Errorf("errore lettura %s: %w", kbPath, err)
+		return &pb.GetKBucketResp{}, nil
 	}
 
-	var kb kbucketFile
-	if err := json.Unmarshal(raw, &kb); err != nil {
-		return nil, fmt.Errorf("errore parse kbucket.json: %w", err)
+	var rt RoutingTableFile // <<-- NUOVO FORMATO
+	if err := json.Unmarshal(b, &rt); err != nil {
+		log.Printf("GetKBucket: parse err: %v", err)
+		return &pb.GetKBucketResp{}, nil
 	}
 
-	// --- 2) normalizza/valida HEX e costruisci i Node ---
-	nodes := make([]*pb.Node, 0, len(kb.BucketHex))
-	for _, hx := range kb.BucketHex {
-		hx = strings.ToLower(strings.TrimSpace(hx))
-		if hx == "" {
-			continue
-		}
-
-		fmt.Printf("GetKBucket: processing hex %q\n", hx)
-		// deve essere hex valido e lungo 20 byte (SHA-1)
-		b, err := hex.DecodeString(hx)
-		if err != nil || len(b) != 20 {
-			log.Printf("GetKBucket: scarto voce non valida (hex/len): %q", hx)
-			continue
-		}
-		// hx è ASCII -> UTF-8 valido
-		nodes = append(nodes, &pb.Node{
-			Id:   hx, // esadecimale, quindi sicuro
-			Host: "", // se non lo sai, lascialo vuoto (UTF-8 valido)
-			Port: 0,
-		})
-	}
-
-	// --- 3) sanità extra: verifica UTF-8 su tutti i campi string prima di serializzare ---
-	for i, n := range nodes {
-		if !utf8.ValidString(n.Id) {
-			log.Printf("GetKBucket: INVALID UTF-8 in nodes[%d].Id: %q", i, n.Id)
-			// opzionale: converti in hex di byte grezzi, ma qui è già hex
-		}
-		if !utf8.ValidString(n.Host) {
-			log.Printf("GetKBucket: INVALID UTF-8 in nodes[%d].Host: %q", i, n.Host)
-			n.Host = ""
+	// Esponiamo i contatti per nome (Id=Name) così il client può contattarli.
+	nodes := make([]*pb.Node, 0, 128)
+	for _, list := range rt.Buckets {
+		for _, e := range list {
+			name := strings.TrimSpace(e.Name)
+			if name == "" {
+				continue
+			}
+			nodes = append(nodes, &pb.Node{
+				Id:   name,
+				Host: name,
+				Port: 8000,
+			})
 		}
 	}
 
-	resp := &pb.GetKBucketResp{Nodes: nodes}
-
-	// --- 4) pre-marshal check (così il panic non arriva dal layer gRPC) ---
-	if _, err := proto.Marshal(resp); err != nil {
-		// log utile per capire quale campo è sporco
-		log.Printf("GetKBucket pre-marshal FAILED: %v", err)
-		return nil, fmt.Errorf("internal: invalid UTF-8 in response: %w", err)
-	}
-
-	return resp, nil
+	return &pb.GetKBucketResp{Nodes: nodes}, nil
 }
 
 func (s *KademliaServer) Ping(ctx context.Context, req *pb.PingReq) (*pb.PingRes, error) {
 	if f := req.GetFrom(); f != nil && f.GetId() != "" {
 		log.Printf("[Ping] ricevuto From.Id=%q", f.GetId())
-		if err := TouchContact(f.GetId()); err != nil {
+		if err := TouchContactByName(f.GetId()); err != nil {
 			log.Printf("[Ping] TouchContact(%q) FAILED: %v", f.GetId(), err)
 		} else {
 			log.Printf("[Ping] TouchContact(%q) OK (bucket aggiornato)", f.GetId())
 		}
-	} else {
-		log.Printf("[Ping] req.From mancante o vuoto: nessun update del bucket")
 	}
 
 	self := os.Getenv("NODE_ID")
@@ -330,9 +276,10 @@ func (s *KademliaServer) UpdateBucket(ctx context.Context, req *pb.UpdateBucketR
 	if c == nil || c.GetId() == "" {
 		return &pb.UpdateBucketRes{Ok: false}, nil
 	}
-	if err := TouchContact(c.GetId()); err != nil {
+	if err := TouchContactByName(c.GetId()); err != nil {
 		return nil, err
 	}
+
 	return &pb.UpdateBucketRes{Ok: true}, nil
 }
 

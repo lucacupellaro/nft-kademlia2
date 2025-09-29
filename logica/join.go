@@ -3,6 +3,8 @@ package logica
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"encoding/hex"
 	"math/rand"
@@ -11,6 +13,10 @@ import (
 	"sync"
 
 	"kademlia-nft/common"
+	pb "kademlia-nft/proto/kad"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -39,26 +45,52 @@ func uniq(ss []string) []string {
 func randID160() []byte { b := make([]byte, 20); _, _ = rand.Read(b); return b }
 
 // Ping molti con worker-pool; se ok, entra nei bucket via TouchContact.
-func pingMany(ctx context.Context, self string, names []string, par int) []string {
-	names = uniq(names)
-	sem := make(chan struct{}, par)
-	var mu sync.Mutex
-	live := make([]string, 0, len(names))
-	var wg sync.WaitGroup
-	for _, n := range names {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(name string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			if err := RpcPing(ctx, self, name); err == nil {
-				mu.Lock()
-				live = append(live, name)
-				mu.Unlock()
-			}
-		}(n)
+func pingMany(ctx context.Context, selfName string, targets []string, maxInflight int) []string {
+	if maxInflight <= 0 {
+		maxInflight = 8
 	}
-	wg.Wait()
+	sem := make(chan struct{}, maxInflight)
+	var mu sync.Mutex
+	live := make([]string, 0, len(targets))
+
+	for _, tgt := range targets {
+		tgt := tgt
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem }()
+
+			addr := fmt.Sprintf("%s:%d", tgt, 8000) // adatta se hai un mapping nome→host:port
+			cctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+
+			conn, err := grpc.DialContext(cctx, addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithBlock(),
+			)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			client := pb.NewKademliaClient(conn)
+			res, err := client.Ping(cctx, &pb.PingReq{
+				From: &pb.Node{Id: selfName},
+			})
+			if err != nil || !res.GetOk() {
+				return
+			}
+
+			// ⬇️ QUI: aggiorna il TUO bucket con il peer che hai pingato con successo
+			_ = TouchContactByName(tgt)
+
+			mu.Lock()
+			live = append(live, tgt)
+			mu.Unlock()
+		}()
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
 	return live
 }
 
@@ -168,9 +200,9 @@ func JoinAndExpand(ctx context.Context, seederAddr, selfName string, seedSample,
 		// 4) ordina per vicinanza al target e pingane un numero ragionevole (budget)
 		// (senza per-bucket, semplice e compat)
 		sort.SliceStable(pros, func(i, j int) bool { return pros[i].ScoreHex < pros[j].ScoreHex })
-		toPing := make([]string, 0, 2*kCapacity)
+		toPing := make([]string, 0, 8*kCapacity)
 		for _, p := range pros {
-			if len(toPing) >= 2*kCapacity {
+			if len(toPing) >= 8*kCapacity {
 				break
 			}
 			toPing = append(toPing, p.Name)
