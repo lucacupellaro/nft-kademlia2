@@ -18,6 +18,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const (
+	kBucketPath = "/data/kbucket.json"
+)
+
 func RemoveAndSortMe(bucket [][]byte, selfId []byte) [][]byte {
 	// Rimuove un nodo dal bucket
 	for i := range bucket {
@@ -70,11 +74,6 @@ func GetNodeListIDs(seederAddr, requesterID string) ([]string, error) {
 	return ids, nil
 }
 
-const (
-	kBucketPath = "/data/kbucket.json"
-	kCapacity   = 3
-)
-
 // TouchContactByName ( inserisce) un contatto nella routing table
 func TouchContactByName(contactName string) error {
 	if contactName == "" {
@@ -92,7 +91,7 @@ func TouchContactByName(contactName string) error {
 		rt.NodeID = strings.TrimSpace(os.Getenv("NODE_ID"))
 	}
 	if rt.BucketSize <= 0 {
-		rt.BucketSize = kCapacity
+		rt.BucketSize = KCapacity
 	}
 	if rt.HashBits <= 0 {
 		rt.HashBits = kHashBits // 160 per SHA-1

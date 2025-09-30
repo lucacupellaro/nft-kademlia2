@@ -165,7 +165,7 @@ func mergeIntoShort(short []cand, add []cand, K int, idsInShort map[string]bool)
 }
 
 // effettua una LookupNFT (FIND_VALUE) su un singolo candidato
-func rpcLookup(ctx context.Context, addr string, target []byte) (*pb.LookupNFTRes, error) {
+func rpcLookup(ctx context.Context, addr, fromID string, target []byte) (*pb.LookupNFTRes, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", addr, err)
@@ -174,7 +174,7 @@ func rpcLookup(ctx context.Context, addr string, target []byte) (*pb.LookupNFTRe
 
 	client := pb.NewKademliaClient(conn)
 	resp, err := client.LookupNFT(ctx, &pb.LookupNFTReq{
-		FromId: "CLI",
+		FromId: fromID, // ← usa l’ID del nodo (es. "node13")
 		Key:    &pb.Key{Key: target},
 	})
 	if err != nil {
@@ -218,7 +218,7 @@ func LookupNFTOnNodeByNameAlpha(startNode string, reverse []Pair, nftName string
 	fmt.Printf("🔎 Hop 1: cerco '%s' su %s (%s)\n", nftName, startNode, hostPort)
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		resp, rpcErr := rpcLookup(ctx, hostPort, target)
+		resp, rpcErr := rpcLookup(ctx, hostPort, startNode, target)
 		cancel()
 		if rpcErr != nil {
 			return 0, false, fmt.Errorf("RPC su %s: %w", startNode, rpcErr)
@@ -265,7 +265,7 @@ func LookupNFTOnNodeByNameAlpha(startNode string, reverse []Pair, nftName string
 			go func(c cand) {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer cancel()
-				resp, rpcErr := rpcLookup(ctx, c.addr, target)
+				resp, rpcErr := rpcLookup(ctx, c.addr, startNode, target)
 				if rpcErr != nil {
 					out <- result{err: rpcErr}
 					return

@@ -32,45 +32,6 @@ func main() {
 	}
 
 	if choice == 2 {
-		fmt.Printf("Hai scelto l'opzione 2. PING\n")
-
-		nodii, err := ui.ListActiveComposeServices("kademlia-nft")
-		if err != nil {
-			log.Fatal("Errore recupero nodi:", err)
-		}
-
-		//ora ho nome dei nodi e hash
-		out, err := ui.Reverse2(nodii)
-		if err != nil {
-			log.Fatal("Errore Reverse2:", err)
-		}
-
-		/*
-
-
-			fmt.Printf("Da quale nodo vuoi fare il PING?\n")
-
-			nodi, err := ui.ListActiveComposeServices("kademlia-nft")
-			if err != nil {
-				log.Fatal("Errore recupero nodi:", err)
-			}
-			fmt.Println("Container attivi:")
-			for _, n := range nodi {
-				fmt.Println(" -", n)
-			}
-
-			fmt.Printf("Verso quale nodo vuoi fare il PING?\n")
-			fmt.Println("Container attivi:")
-			for _, n := range nodi {
-				fmt.Println(" -", n)
-			}
-		*/
-
-		ui.PingNode("node7", "node8", out)
-
-	}
-
-	if choice == 3 {
 		var nodi []string
 		nodi, err := ui.ListActiveComposeServices("kademlia-nft")
 		if err != nil {
@@ -128,7 +89,7 @@ func main() {
 			}
 		*/
 	}
-	if choice == 4 {
+	if choice == 3 {
 
 		var nodi []string
 
@@ -195,7 +156,7 @@ func main() {
 		}
 
 	}
-	if choice == 5 {
+	if choice == 4 {
 
 		var nodi []string
 		var biggerNode string
@@ -226,38 +187,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if choice == 6 {
 
-		fmt.Println("Rebalancing della risorse")
-		nodi, err := ui.ListActiveComposeServices("kademlia-nft")
-		if err != nil {
-			log.Fatal("Errore recupero nodi:", err)
-		}
-
-		fmt.Println("Container attivi:")
-		for _, n := range nodi {
-			fmt.Println(" -", n)
-		}
-
-		fmt.Println("Rebalancing della risorse per il nodo,", "node6")
-
-		logica.RemoveNode1(&nodi)
-
-		//faccio il mapping dei nodi
-		//var dir *logica.ByteMapping
-
-		//dir = logica.BuildByteMappingSHA1(nodi)
-
-		targetAddr := "localhost:8006"
-		//targetID := logica.Sha1ID(targetAddr) // ID SHA1 del nodo4
-		activeNodes := nodi // es: ["node1:8000", "node2:8000", ...]
-
-		err = ui.RebalanceNode(targetAddr, "node6", activeNodes, 2)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	if choice == 7 {
+	if choice == 5 {
 
 		fmt.Println("Hai scelto rimozione nodo")
 		fmt.Println("Scegli il nodo da rimuovere")

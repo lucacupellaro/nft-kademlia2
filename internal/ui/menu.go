@@ -25,11 +25,9 @@ type MenuChoice int
 const (
 	MenuListNodes MenuChoice = iota + 1
 	MenuShowBucket
-	MenuPing
 	MenuSearchNFT
 	MenuAddNFT
 	MenuAddNode
-	MenuRebalance
 	MenuRemoveNode
 	MenuQuit
 )
@@ -43,18 +41,16 @@ func ShowWelcomeMenu() MenuChoice {
 Benvenuto! Seleziona un'operazione:
 
   1) Elenca nodi
-  2) Ping (X->Y)
-  3) Cerca un NFT  
-  4) Aggiungi un NFT
-  5) Aggiungi un nodo
-  6) Rebalancing delle risorse
-  7) Rimuovi un nodo
-  8) Esci
+  2) Cerca un NFT  
+  3) Aggiungi un NFT
+  4) Aggiungi un nodo
+  5) Rimuovi un nodo
+  6) Esci
 `)
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("Scegli [1-8]: ") // <-- coerente con 1..8
+		fmt.Print("Scegli [1-6]: ") // <-- coerente con 1..6
 		line, _ := reader.ReadString('\n')
 		line = strings.TrimSpace(line)
 		switch line {
@@ -102,22 +98,6 @@ func ResolveStartHostPort(name string) (string, error) {
 	return fmt.Sprintf("localhost:%d", 8000+n), nil
 	// Dentro rete docker: return fmt.Sprintf("%s:%d", name, 8000), nil
 }
-
-/*
-func ResolveStartHostPort(name string) (string, error) {
-	name = strings.TrimSpace(strings.ToLower(name))
-	// supporta sia "node3" sia "nodo3"
-	if strings.HasPrefix(name, "nodo") {
-		name = "node" + name[len("nodo"):]
-	}
-	var n int
-	if _, err := fmt.Sscanf(name, "node%d", &n); err != nil || n < 1 || n > 11 {
-		return "", fmt.Errorf("nome nodo non valido: %q", name)
-	}
-
-	return fmt.Sprintf("localhost:%d", 8000+n), nil
-}
-*/
 
 type Pair struct {
 	esaSha1 string //esAdecimale(SHA1(NODOX))
