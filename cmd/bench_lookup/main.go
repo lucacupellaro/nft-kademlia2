@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +27,6 @@ const (
 	composeProject = "kademlia-nft"
 	defaultEnvPath = ".env"
 	defaultOutCSV  = "results/lookup.csv"
-	maxHopsDefault = 30
 	defaultSummary = "results/nRuns.csv"
 	waitReadyMax   = 40 * time.Second // attesa massima servizi dopo il rebuild
 	waitProbeEvery = 700 * time.Millisecond
@@ -52,7 +52,7 @@ type RunStats struct {
 // ------------------------------------------------------------
 
 func main() {
-	a := 10
+	a := 1
 	if a == 3 {
 		// carica i nomi NFT
 		names, err := readNames(csvNFT)
@@ -89,112 +89,124 @@ func main() {
 	}
 	if a == 1 {
 		//test per variare N con alpha e k fissi e vedere l'andamento degli hop medi
-		names, err := readNames(csvNFT)
-		if err != nil {
-			log.Fatalf("Errore lettura CSV NFT: %v", err)
-		}
+		// test per variare N con alpha e k fissi e vedere l'andamento degli hop medi
+		{
+			// 0) leggi parametri fissi dal .env (una sola volta)
+			env := readEnvFile(defaultEnvPath)
+			kbEnv := firstInt(env["BUCKET_SIZE"], 4) // resta invariato per tutte le iterazioni
+			alphaEnv := firstInt(env["ALPHA"], 3)    // resta invariato per tutte le iterazioni
+			// replEnv := firstInt(env["REPLICATION_FACTOR"], 3) // se ti serve nei log
 
-		_ = os.MkdirAll("results", 0o755)
-
-		// apri file di output
-		f, err := os.Create(outSummary)
-		if err != nil {
-			log.Fatalf("Impossibile creare %s: %v", outSummary, err)
-		}
-		defer f.Close()
-		w := csv.NewWriter(f)
-		defer w.Flush()
-
-		_ = w.Write([]string{"iterazione", "numero_nodi", "kbucket", "nHops_medio", "stdHops", "maxHops", "NFT_trovati", "NFT_non_trovati"})
-		w.Flush()
-
-		iter := 0
-		for N := 100; N <= 200; N = N + 5 {
-			iter++
-			kb := 3
-			alpha := 3
-
-			fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d, α=%d ===\n", iter, N, kb, alpha)
-
-			// aggiorna .env
-			if err := setEnvVar(defaultEnvPath, "N", strconv.Itoa(N)); err != nil {
-				log.Fatalf("Errore set N: %v", err)
-			}
-			if err := setEnvVar(defaultEnvPath, "BUCKET_SIZE", strconv.Itoa(kb)); err != nil {
-				log.Fatalf("Errore set BUCKET_SIZE: %v", err)
-			}
-
-			// rigenera docker-compose.yml
-			if out, err := runCmd("bash", "generate-compose.sh"); err != nil {
-				log.Fatalf("generate-compose.sh fallito: %v\n%s", err, out)
-			}
-
-			// rebuild cluster
-			if out, err := composeUpBuild(composeProject); err != nil {
-				log.Fatalf("docker compose up fallito: %v\n%s", err, out)
-			}
-
-			// lista nodi attivi
-			nodes, err := ui.ListActiveComposeServices(composeProject)
+			// 1) setup output
+			_ = os.MkdirAll("results", 0o755)
+			f, err := os.Create(outSummary) // overwrite ad ogni run del test
 			if err != nil {
-				log.Fatalf("Errore lista nodi: %v", err)
+				log.Fatalf("Impossibile creare %s: %v", outSummary, err)
 			}
-			if len(nodes) == 0 {
-				log.Fatal("Nessun nodo attivo dopo il rebuild")
-			}
-			reverse, err := ui.Reverse2(nodes)
-			if err != nil {
-				log.Fatalf("Errore Reverse2: %v", err)
-			}
-
-			// attesa readiness
-			if err := waitClusterReady(nodes, waitReadyMax); err != nil {
-				log.Printf("⚠️ Cluster forse non pronto: %v", err)
-			}
-			trovati := 0
-			nonTrovati := 0
-
-			// run completo
-			hops := []int{}
-			for i, name := range names {
-				start := test.RandomNode(nodes)
-				// usa α=3 di default qui
-
-				h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
-				if err != nil || !found {
-					nonTrovati++
-					continue
-				}
-				trovati++
-				hops = append(hops, h)
-				fmt.Printf("[%d/%d] %s trovato in %d hop\n", i+1, len(names), name, h)
-			}
-
-			mean, std := test.MeanStd(hops)
-
-			maxHop := 0
-			for _, v := range hops {
-				if v > maxHop {
-					maxHop = v
-				}
-			}
-
+			defer f.Close()
+			w := csv.NewWriter(f)
+			defer w.Flush()
 			_ = w.Write([]string{
-				strconv.Itoa(iter),
-				strconv.Itoa(N),
-				strconv.Itoa(kb),
-				fmt.Sprintf("%.4f", mean),
-				fmt.Sprintf("%.4f", std),
-				strconv.Itoa(maxHop),
-				strconv.Itoa(trovati),
-				strconv.Itoa(nonTrovati),
+				"iterazione", "numero_nodi", "kbucket", "alpha",
+				"nHops_medio", "stdHops", "maxHops", "NFT_trovati", "NFT_non_trovati",
 			})
 			w.Flush()
 
-			fmt.Printf(">>> Risultati: avgHops=%.3f, stdHops=%.3f (su %d lookup)\n", mean, std, len(hops))
-		}
+			// 2) carica gli NFT da cercare
+			names, err := readNames(csvNFT)
+			if err != nil {
+				log.Fatalf("Errore lettura CSV NFT: %v", err)
+			}
+			if len(names) == 0 {
+				log.Fatalf("Nel CSV %s non ho trovato la colonna 'Name' con valori.", csvNFT)
+			}
 
-		fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
+			iter := 0
+			for N := 30; N <= 100; N += 10 {
+				iter++
+				fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d, α=%d ===\n", iter, N, kbEnv, alphaEnv)
+
+				// 3) aggiorna SOLO N nel .env
+				if err := setEnvVar(defaultEnvPath, "N", strconv.Itoa(N)); err != nil {
+					log.Fatalf("Errore set N: %v", err)
+				}
+				// NON toccare BUCKET_SIZE / ALPHA qui: restano kbEnv/alphaEnv
+
+				// 4) rigenera compose e rebuild del cluster
+				if out, err := runCmd("bash", "generate-compose.sh"); err != nil {
+					log.Fatalf("generate-compose.sh fallito: %v\n%s", err, out)
+				}
+
+				// --- OPZIONALE: azzera SOLO i dati (se usi bind-mount ./data -> /data)
+				// _, _ = runCmd("bash", "-lc", "shopt -s dotglob nullglob; sudo rm -rf ./data/*")
+
+				// down/up (senza cache) per partire pulito
+				if out, err := composeUpBuild(composeProject); err != nil {
+					log.Fatalf("docker compose up fallito: %v\n%s", err, out)
+				}
+
+				// 5) scopri i nodi e crea la reverse map
+				nodes, err := ui.ListActiveComposeServices(composeProject)
+				if err != nil {
+					log.Fatalf("Errore lista nodi: %v", err)
+				}
+				if len(nodes) == 0 {
+					log.Fatal("Nessun nodo attivo dopo il rebuild")
+				}
+				reverse, err := ui.Reverse2(nodes)
+				if err != nil {
+					log.Fatalf("Errore Reverse2: %v", err)
+				}
+				// opzionale: escludi il seeder (se non partecipa come peer)
+				nodes = slices.DeleteFunc(nodes, func(s string) bool { return s == "node1" })
+
+				// 6) attesa readiness servizi gRPC
+				if err := waitClusterReady(nodes, waitReadyMax); err != nil {
+					log.Printf("⚠️ Cluster forse non pronto: %v (procedo comunque)", err)
+				}
+
+				// 7) esegui tutte le lookup
+				trovati, nonTrovati := 0, 0
+				hops := make([]int, 0, len(names))
+				for i, name := range names {
+					start := test.RandomNode(nodes)
+					h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alphaEnv, maxHops)
+					if err != nil || !found {
+						nonTrovati++
+						continue
+					}
+					trovati++
+					hops = append(hops, h)
+					fmt.Printf("[%d/%d] %s trovato in %d hop\n", i+1, len(names), name, h)
+				}
+
+				// 8) statistiche e salvataggio riga
+				mean, std := test.MeanStd(hops)
+				maxHop := 0
+				for _, v := range hops {
+					if v > maxHop {
+						maxHop = v
+					}
+				}
+
+				_ = w.Write([]string{
+					strconv.Itoa(iter),
+					strconv.Itoa(N),
+					strconv.Itoa(kbEnv),
+					strconv.Itoa(alphaEnv),
+					fmt.Sprintf("%.4f", mean),
+					fmt.Sprintf("%.4f", std),
+					strconv.Itoa(maxHop),
+					strconv.Itoa(trovati),
+					strconv.Itoa(nonTrovati),
+				})
+				w.Flush()
+
+				fmt.Printf(">>> Risultati: avgHops=%.3f, stdHops=%.3f (su %d lookup)\n", mean, std, len(hops))
+			}
+
+			fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
+		}
 
 	} else {
 
