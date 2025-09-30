@@ -4,8 +4,10 @@ import (
 	"bytes"
 	crand "crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	mrand "math/rand"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -20,7 +22,103 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// ===== Config locali (puoi portarli in ENV) =====
+var (
+	rtMu sync.Mutex // <-- nome corretto
+)
+
+// struttura per il salvataggio
+type KBucketFile struct {
+	NodeID    string   `json:"node_id"`
+	BucketHex []string `json:"bucket_hex"`
+	SavedAt   string   `json:"saved_at"`
+}
+
+type PeerEntry struct {
+	Name string `json:"name"` // es. "node7"
+	SHA  string `json:"sha"`  // sha1 in hex del peer
+	Dist string `json:"dist"` // distanza XOR self^peer (hex)
+}
+
+type RoutingTableFile struct {
+	NodeID       string                 `json:"self_node"`
+	BucketSize   int                    `json:"bucket_size"`
+	HashBits     int                    `json:"hash_bits"` // 160 per SHA1
+	SavedAt      string                 `json:"saved_at"`
+	Buckets      map[string][]PeerEntry `json:"buckets"` // "0".."159" -> peers
+	NonEmptyInfo int                    `json:"non_empty_buckets"`
+}
+
+var (
+	// Esporta questi se vuoi settarli dal main:
+	KBucketPath string
+	KCapacity   int
+	kHashBits   = 160
+)
+
+func SetKBucketGlobals(path string, capacity int) {
+	KBucketPath = path
+	KCapacity = capacity
+}
+
+func EnsureKBucketFile(path, selfName string) error {
+	rtMu.Lock()
+	defer rtMu.Unlock()
+
+	// Backup best-effort se esiste
+	if _, err := os.Stat(path); err == nil {
+		_ = os.Rename(path, path+".bak."+time.Now().UTC().Format("20060102T150405Z"))
+	}
+
+	rt := &RoutingTableFile{
+		NodeID:       selfName, // JSON: "self_node"
+		BucketSize:   kCapacity,
+		HashBits:     kHashBits,
+		SavedAt:      time.Now().UTC().Format(time.RFC3339),
+		Buckets:      map[string][]PeerEntry{},
+		NonEmptyInfo: 0,
+	}
+
+	return saveRTAtomic(path, rt)
+}
+
+func saveRTAtomic(path string, rt *RoutingTableFile) error {
+	rt.SavedAt = time.Now().UTC().Format(time.RFC3339)
+	j, _ := json.MarshalIndent(rt, "", "  ")
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, j, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path) // rename è atomico su stessa FS
+}
+
+func countNonEmpty(m map[string][]PeerEntry) int {
+	n := 0
+	for _, v := range m {
+		if len(v) > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+func loadRT(path string) (*RoutingTableFile, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var rt RoutingTableFile
+	if err := json.Unmarshal(b, &rt); err != nil {
+		return nil, err
+	}
+	if rt.Buckets == nil {
+		rt.Buckets = map[string][]PeerEntry{}
+	}
+	if rt.BucketSize <= 0 {
+		rt.BucketSize = kCapacity
+	}
+	return &rt, nil
+}
+
 const (
 	joinDialTimeout     = 1200 * time.Millisecond
 	joinRPCTimeout      = 1500 * time.Millisecond
@@ -73,32 +171,6 @@ func dialableName(n *pb.Node) string {
 		return id
 	}
 	return ""
-}
-
-// Ping(remote) con FromId=selfName. Se OK, TouchContact(remote).
-func RpcPing(ctx context.Context, selfName, remote string) error {
-	ap := addrOf(remote)
-
-	dctx, cancel := context.WithTimeout(ctx, joinDialTimeout)
-	defer cancel()
-	conn, err := grpc.DialContext(dctx, ap, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	cli := pb.NewKademliaClient(conn)
-
-	rctx, cancel2 := context.WithTimeout(ctx, joinRPCTimeout)
-	defer cancel2()
-
-	_, err = cli.Ping(rctx, &pb.PingReq{
-		From: &pb.Node{Id: selfName, Host: selfName, Port: 8000},
-	})
-	if err == nil {
-		_ = TouchContactByName(remote) // aggiorna LRU locale (salva kbucket.json)
-	}
-	return err
 }
 
 // FIND_NODE emulata via LookupNFT(Key=target). Se OK, TouchContact(remote) e ritorna nomi chiamabili.
@@ -157,7 +229,7 @@ func JoinAndExpandLite(ctx context.Context, seederAddr, selfName string, alpha, 
 	}
 	mrand.Seed(time.Now().UnixNano())
 
-	// 1) prendo i seed dal seeder
+	// 1) prendo i seed dal seeder → pulisco, mescolo, taglio e me ne rimangono seedSample
 	seeds, err := GetNodeListIDs(seederAddr, selfName)
 	if err != nil {
 		return err
@@ -180,10 +252,10 @@ func JoinAndExpandLite(ctx context.Context, seederAddr, selfName string, alpha, 
 		clean = clean[:seedSample]
 	}
 
-	// 2) ping iniziale dei seed → popola RT via TouchContactByName
+	// 2) ping iniziale dei seed → popola RT via TouchContactByName, Ritorna i nodi vivi
 	live := pingMany(ctx, selfName, clean, joinMaxInflightPing)
 	if len(live) == 0 {
-		return nil // nessuno vivo ora; riproverai più tardi
+		return nil
 	}
 
 	selfRaw := common.Sha1ID(selfName)
@@ -231,11 +303,12 @@ func JoinAndExpandLite(ctx context.Context, seederAddr, selfName string, alpha, 
 						if _, ok := beforeSet[peerHex]; ok {
 							continue // già presente prima
 						}
-						// score = XOR(peerID, tgt)
-						sc := make([]byte, 20)
-						for i := 0; i < 20; i++ {
-							sc[i] = peerID[i] ^ tgt[i]
+
+						sc, err := common.XOR(peerID, tgt)
+						if err != nil {
+							return
 						}
+
 						prospects = append(prospects, prospect{Name: nm, Score: sc})
 					}
 					mu.Unlock()
@@ -312,4 +385,54 @@ func kbSnapSet(path string) map[string]struct{} {
 		}
 	}
 	return set
+}
+
+// Viene fatto il ping di ogni nodo in targets e restituisce la lista di quelli che vanno a buon fine
+func pingMany(ctx context.Context, selfName string, targets []string, maxInflight int) []string {
+	if maxInflight <= 0 {
+		maxInflight = 8
+	}
+	sem := make(chan struct{}, maxInflight)
+	var mu sync.Mutex
+	live := make([]string, 0, len(targets))
+
+	for _, tgt := range targets {
+		tgt := tgt
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem }()
+
+			addr := fmt.Sprintf("%s:%d", tgt, 8000) // adatta se hai un mapping nome→host:port
+			cctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+
+			conn, err := grpc.DialContext(cctx, addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithBlock(),
+			)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			client := pb.NewKademliaClient(conn)
+			res, err := client.Ping(cctx, &pb.PingReq{
+				From: &pb.Node{Id: selfName},
+			})
+			if err != nil || !res.GetOk() {
+				return
+			}
+
+			// ⬇️ QUI: aggiorna il TUO bucket con il peer che hai pingato con successo
+			_ = TouchContactByName(tgt)
+
+			mu.Lock()
+			live = append(live, tgt)
+			mu.Unlock()
+		}()
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
+	return live
 }

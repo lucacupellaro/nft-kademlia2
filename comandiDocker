@@ -22,4 +22,9 @@ sudo docker system prune -a --volumes -f
 //  docker compose logs -f node6
 
 //per vedere se la ricerca viene fatta bene di ogni nodo con setup fisso 
-go run cmd/bench_lookup/main.go   -csv csv/NFT_Top_Collections.csv   -alpha 3   -maxhops 30   -bucketFrom 3   -bucketTo 3   -noRebuild
+
+go run cmd/bench_lookup/main.go \
+  -csv csv/NFT_Top_Collections.csv \
+  -out results/lookup.csv \
+  -outSummary results/nRuns.csv \
+  -maxhops 30

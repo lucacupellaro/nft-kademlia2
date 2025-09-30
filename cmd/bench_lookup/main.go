@@ -201,30 +201,48 @@ func main() {
 		//test per cercare tutti gli nft
 		// test statico: cerca tutti gli NFT del dataset con configurazione presa dall'env, senza toccare .env e senza rebuild
 
+		// flags SOLO per file/percorsi
 		csvPath := flag.String("csv", "", "/percorso/collections.csv")
 		envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
 		outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola run (overwrite)")
 		outSummary := flag.String("outSummary", defaultSummary, "Output CSV riassunto (append)")
-		maxHops := flag.Int("maxhops", maxHopsDefault, "Max hop per lookup")
-		//alphaFlag := flag.Int("alpha", 0, "Grado di parallelismo per round (alpha). Se 0, usa ALPHA da .env o 3")
 		flag.Parse()
 
 		if *csvPath == "" {
 			log.Fatal("Devi specificare -csv /percorso/collections.csv (con colonna 'Name').")
 		}
 
-		// 1) carica parametri da .env (N, BUCKET_SIZE, REPLICATION_FACTOR, ALPHA)
+		// 1) carica parametri da .env
 		env := readEnvFile(*envPath)
+
+		// helper: prende un int dal map, con default
+		firstInt := func(s string, def int) int {
+			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && v != 0 {
+				return v
+			}
+			return def
+		}
+
 		N := firstInt(env["N"], 0)
 		bucketSize := firstInt(env["BUCKET_SIZE"], 0)
-		repl := firstInt(env["REPLICATION_FACTOR"], 0)
-		alpha := 5
-		if alpha <= 0 {
-			alpha = firstInt(env["ALPHA"], 3)
+		repl := firstInt(env["REPLICATION_FACTOR"], 3)
+		alpha := firstInt(env["ALPHA"], 3)              // <-- ora viene davvero dal .env
+		maxHops := firstInt(env["LOOKUP_MAX_HOPS"], 10) // o "MAX_HOPS", come preferisci
+
+		// validazioni minime (tutte da .env)
+		if N <= 0 {
+			log.Fatal("Nel .env manca N o è <= 0")
+		}
+		if bucketSize <= 0 {
+			log.Fatal("Nel .env manca BUCKET_SIZE o è <= 0")
+		}
+		if repl <= 0 {
+			log.Fatal("Nel .env manca REPLICATION_FACTOR o è <= 0")
 		}
 		if alpha <= 0 {
-			alpha = 3
+			log.Fatal("Nel .env manca ALPHA o è <= 0")
 		}
+		// maxHops può avere un default ragionevole, quindi niente fatal
 
 		// 2) prepara cartella risultati
 		_ = os.MkdirAll("results", 0o755)
@@ -240,16 +258,8 @@ func main() {
 		defer sumW.Flush()
 		if !summaryExists {
 			_ = sumW.Write([]string{
-				"iterazione",
-				"NFT",
-				"NFT NON TROVATI",
-				"MEDIA HOP FATTI",
-				"NFT TROVATI",
-				"MAX HOPS",
-				"NODI",
-				"BUCKETSIZE",
-				"FATTORE DI REPLICAZIONI",
-				"ALPHA",
+				"iterazione", "NFT", "NFT NON TROVATI", "MEDIA HOP FATTI", "NFT TROVATI", "MAX HOPS",
+				"NODI", "BUCKETSIZE", "FATTORE DI REPLICAZIONI", "ALPHA",
 			})
 			sumW.Flush()
 		}
@@ -263,7 +273,7 @@ func main() {
 			log.Fatalf("Nel CSV %s non ho trovato la colonna 'Name' con valori.", *csvPath)
 		}
 
-		// 5) scopri nodi attivi e reverse map (nessun rebuild)
+		// 5) scopri nodi attivi e reverse map (puoi tenerla, ma i parametri *restano* quelli del .env)
 		nodes, err := ui.ListActiveComposeServices(composeProject)
 		if err != nil {
 			log.Fatalf("Errore recupero nodi: %v", err)
@@ -275,8 +285,16 @@ func main() {
 		if err != nil {
 			log.Fatalf("Errore Reverse2: %v", err)
 		}
+		// opzionale: escludi node1 se è solo seeder
+		filtered := make([]string, 0, len(nodes))
+		for _, n := range nodes {
+			if n != "node1" {
+				filtered = append(filtered, n)
+			}
+		}
+		nodes = filtered
 
-		// 6) attesa readiness dei servizi gRPC
+		// 6) readiness
 		if err := waitClusterReady(nodes, waitReadyMax); err != nil {
 			log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
 		}
@@ -292,30 +310,29 @@ func main() {
 		defer outF.Close()
 		w := csv.NewWriter(outF)
 		defer w.Flush()
-
-		// header dettagli
-		_ = w.Write([]string{
-			"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha",
-		})
+		_ = w.Write([]string{"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha"})
 		w.Flush()
 
-		// 8) run unica: cerca tutti gli NFT con config statica
+		// 8) run unica
 		rand.Seed(time.Now().UnixNano())
 
-		trovati := 0
-		nonTrovati := 0
+		trovati, nonTrovati := 0, 0
 		hops := make([]int, 0, len(names))
 
 		for i, name := range names {
-			start := nodes[rand.Intn(len(nodes))] // scegli un nodo qualsiasi (se vuoi escludere node1, filtra prima)
+			start := nodes[rand.Intn(len(nodes))]
 			fmt.Printf("[%d/%d] %s  (start=%s, α=%d)\n", i+1, len(names), name, start, alpha)
 
 			t0 := time.Now()
-			h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, *maxHops)
+			h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
 			elapsed := time.Since(t0).Milliseconds()
 
-			if err != nil {
-				fmt.Printf("  ✖ errore lookup: %v\n", err)
+			if err != nil || !found {
+				if err != nil {
+					fmt.Printf("  ✖ errore lookup: %v\n", err)
+				} else {
+					fmt.Println("  ✖ non trovato")
+				}
 				_ = w.Write([]string{
 					start, name, "-1",
 					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
@@ -326,30 +343,18 @@ func main() {
 				continue
 			}
 
-			if !found {
-				fmt.Println("  ✖ non trovato")
-				_ = w.Write([]string{
-					start, name, "-1",
-					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
-					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
-				})
-				w.Flush()
-				nonTrovati++
-			} else {
-				fmt.Printf("  ✅ trovato in %d hop, %d ms\n", h, elapsed)
-				_ = w.Write([]string{
-					start, name, strconv.Itoa(h),
-					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
-					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
-				})
-				w.Flush()
-
-				trovati++
-				hops = append(hops, h)
-			}
+			fmt.Printf("  ✅ trovato in %d hop, %d ms\n", h, elapsed)
+			_ = w.Write([]string{
+				start, name, strconv.Itoa(h),
+				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+			})
+			w.Flush()
+			trovati++
+			hops = append(hops, h)
 		}
 
-		// 9) statistiche e summary (iterazione singola = 1)
+		// 9) statistiche e summary
 		mean, std := test.MeanStd(hops)
 		fmt.Printf("  📊 statistiche: media_hop=%.3f, std_hop=%.3f\n", mean, std)
 		maxHop := 0

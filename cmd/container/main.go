@@ -172,59 +172,22 @@ func main() {
 
 	} else {
 
-		// ------------------- Bootstrap dei Peer, recupero lista nodi dal seeder e le varibili d'ambiente per costruire la routing table ------------------- //
+		// ------------------- Bootstrap dei Peer, recupero le variabili d'ambiente per costruire la routing table ------------------- //
 
 		dataDir := "/data"
 		if err := os.MkdirAll(dataDir, 0o755); err != nil {
 			log.Fatalf("Impossibile creare %s: %v", dataDir, err)
 		}
 
-		// ID del nodo locale (nome → SHA1 a 160 bit)
 		nodeID := strings.TrimSpace(os.Getenv("NODE_ID"))
 		if nodeID == "" {
 			log.Fatalf("NODE_ID non impostato")
 		}
 		//selfSHA := common.Sha1ID(nodeID)
 
-		bucketSize := logica.RequireIntEnv("BUCKET_SIZE", 4)
+		bucketSize := logica.RequireIntEnv("BUCKET_SIZE", 3)
 		if bucketSize <= 0 {
 			bucketSize = 5
-		}
-
-		// Retry per attendere il seeder e una lista sufficientemente popolata
-		var nodes []string
-		retryMax := 60
-		for attempt := 1; attempt <= retryMax; attempt++ {
-			nl, err := logica.GetNodeListIDs("node1:8000", nodeID)
-			if err != nil {
-				log.Printf("[bootstrap %s] get node list: tentativo %d/%d: %v", nodeID, attempt, retryMax, err)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			// de-dup, normalizza, rimuovi self
-			seen := make(map[string]bool, len(nl))
-			clean := make([]string, 0, len(nl))
-			for _, n := range nl {
-				n = strings.TrimSpace(n)
-				if n == "" || n == nodeID || seen[n] {
-					continue
-				}
-				seen[n] = true
-				clean = append(clean, n)
-			}
-			if len(clean) == 0 {
-				log.Printf("[bootstrap %s] lista nodi vuota (tentativo %d/%d) — retry", nodeID, attempt, retryMax)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			nodes = clean
-			fmt.Printf("[bootstrap %s] lista nodi ottenuta (%d nodi) dopo %d tentativi\n", nodeID, len(nodes), attempt)
-			break
-		}
-		if len(nodes) == 0 {
-			log.Fatalf("[bootstrap %s] impossibile ottenere directory nodi dopo %d tentativi", nodeID, retryMax)
 		}
 
 		// ------------------- Costruzione routing table con capienza bucket K e salvataggio -------------------
@@ -237,9 +200,9 @@ func main() {
 		}
 
 		// Bootstrap + espansione (ping → find_node → ping mirato)
-		alpha := logica.RequireIntEnv("ALPHA", 2)
-		seedSample := 2 * bucketSize
-		iters := logica.RequireIntEnv("JOIN_ITERS", 2)
+		alpha := logica.RequireIntEnv("ALPHA", 3)
+		seedSample := logica.RequireIntEnv("SEEDSAMPLE", 10)
+		iters := logica.RequireIntEnv("JOIN_ITERS", 3)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()

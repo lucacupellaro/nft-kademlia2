@@ -1,47 +1,56 @@
 {
   "self_node": "node39",
-  "bucket_size": 8,
+  "bucket_size": 3,
   "hash_bits": 160,
-  "saved_at": "2025-09-29T20:30:28Z",
+  "saved_at": "2025-09-30T15:50:50Z",
   "buckets": {
+    "153": [
+      {
+        "name": "node27",
+        "sha": "b0bf0da25d98de006074feb5c09317ca1bb9d415",
+        "dist": ""
+      }
+    ],
     "155": [
       {
-        "name": "node40",
-        "sha": "bdeaf51017ab9ae4081d96192fe3deb1d48510c0",
+        "name": "node33",
+        "sha": "b817ba9e10715d9f776b40d162d0d4e061ad7c34",
+        "dist": ""
+      }
+    ],
+    "157": [
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
         "dist": ""
       }
     ],
     "158": [
       {
-        "name": "node18",
-        "sha": "c30877e01a9fd4a26e8b99b330b0a27dae65ddc5",
+        "name": "node17",
+        "sha": "d88cfbd77c51a97a7709265610deb4655b1d9b73",
+        "dist": ""
+      },
+      {
+        "name": "node16",
+        "sha": "ec83b86f7f6fc03a5e6f7935dce9f88c187b5755",
+        "dist": ""
+      },
+      {
+        "name": "node32",
+        "sha": "d329117b694b55ff8dd12055edcf6d65f452a258",
         "dist": ""
       }
     ],
     "159": [
       {
-        "name": "node35",
-        "sha": "0b4147cdcf8d83d0c1564034243d98d21970ca79",
+        "name": "node2",
+        "sha": "2dbf44a68b77b15bfa5bc3d66c97892a57402bbe",
         "dist": ""
       },
       {
-        "name": "node22",
-        "sha": "7c729e3965ea85624b84fd12815e55e2f0f1c03d",
-        "dist": ""
-      },
-      {
-        "name": "node28",
-        "sha": "1207716b0643115ee89297bb533427d4deb94690",
-        "dist": ""
-      },
-      {
-        "name": "node6",
-        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
-        "dist": ""
-      },
-      {
-        "name": "node10",
-        "sha": "4e15dc72a6c09157df7aa886c76c4d0af1ac72c6",
+        "name": "node21",
+        "sha": "671b2757a89f0fb1a5432e1bc91b6b42e531d68d",
         "dist": ""
       },
       {
@@ -51,5 +60,5 @@
       }
     ]
   },
-  "non_empty_buckets": 3
+  "non_empty_buckets": 5
 }
