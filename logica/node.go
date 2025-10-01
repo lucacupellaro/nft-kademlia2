@@ -1,15 +1,12 @@
 package logica
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"kademlia-nft/common"
 	pb "kademlia-nft/proto/kad"
-	"log"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,32 +18,6 @@ import (
 const (
 	kBucketPath = "/data/kbucket.json"
 )
-
-func RemoveAndSortMe(bucket [][]byte, selfId []byte) [][]byte {
-	// Rimuove un nodo dal bucket
-	for i := range bucket {
-		if bytes.Equal(bucket[i], selfId) {
-			bucket = append(bucket[:i], bucket[i+1:]...)
-			break
-		}
-	}
-
-	// 2. Riordina per distanza XOR dal nodo corrente (selfID)
-	sort.Slice(bucket, func(i, j int) bool {
-		var err1 error
-		var err2 error
-		distI, err1 := common.XOR(selfId, bucket[i])
-		distJ, err2 := common.XOR(selfId, bucket[j])
-		if err1 != nil || err2 != nil {
-			log.Printf("WARN: errore calcolo distanza XOR: %v, %v", err1, err2)
-			return false
-		}
-		return LessThan(distI, distJ)
-	})
-
-	return bucket
-
-}
 
 func GetNodeListIDs(seederAddr, requesterID string) ([]string, error) {
 	// 1) connetti al seeder via gRPC
@@ -81,7 +52,7 @@ func TouchContactByName(contactName string) error {
 	}
 
 	rtMu.Lock()
-	defer rtMu.Unlock()
+	defer rtMu.Unlock() //defer unlock quando in caso di return
 
 	rt, err := loadRT(kBucketPath)
 	if err != nil {

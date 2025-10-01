@@ -82,6 +82,7 @@ func main() {
 		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 			log.Fatalf("mkdir: %v", err)
 		}
+		//salvo il mapping dei nodi sul seeder 1
 		if err := logica.SaveByteMappingJSON(out, dir); err != nil {
 			log.Fatalf("Errore salvataggio byte_mapping.json: %v", err)
 		}

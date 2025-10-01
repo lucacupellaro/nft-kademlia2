@@ -1,3 +1,4 @@
-iterazione,numero_nodi,kbucket,nHops_medio,stdHops,maxHops,NFT_trovati,NFT_non_trovati
-1,100,3,2.3838,1.0121,5,99,492
-2,105,3,2.5267,1.0288,5,131,460
+iterazione,numero_nodi,kbucket,alpha,nHops_medio,stdHops,maxHops,NFT_trovati,NFT_non_trovati
+1,30,4,3,2.1269,0.5925,3,591,0
+2,50,4,3,2.3638,0.6514,4,591,0
+

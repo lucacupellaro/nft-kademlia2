@@ -42,14 +42,13 @@ type PeerEntry struct {
 type RoutingTableFile struct {
 	NodeID       string                 `json:"self_node"`
 	BucketSize   int                    `json:"bucket_size"`
-	HashBits     int                    `json:"hash_bits"` // 160 per SHA1
+	HashBits     int                    `json:"hash_bits"`
 	SavedAt      string                 `json:"saved_at"`
-	Buckets      map[string][]PeerEntry `json:"buckets"` // "0".."159" -> peers
+	Buckets      map[string][]PeerEntry `json:"buckets"`
 	NonEmptyInfo int                    `json:"non_empty_buckets"`
 }
 
 var (
-	// Esporta questi se vuoi settarli dal main:
 	KBucketPath string
 	KCapacity   int
 	kHashBits   = 160
@@ -66,17 +65,17 @@ func SetKBucketGlobals(path string, capacity int) {
 	KCapacity = capacity
 }
 
+// inizializza la routing tabel del nodo
 func EnsureKBucketFile(path, selfName string) error {
 	rtMu.Lock()
 	defer rtMu.Unlock()
 
-	// Backup best-effort se esiste
 	if _, err := os.Stat(path); err == nil {
 		_ = os.Rename(path, path+".bak."+time.Now().UTC().Format("20060102T150405Z"))
 	}
 
 	rt := &RoutingTableFile{
-		NodeID:       selfName, // JSON: "self_node"
+		NodeID:       selfName,
 		BucketSize:   KCapacity,
 		HashBits:     kHashBits,
 		SavedAt:      time.Now().UTC().Format(time.RFC3339),
@@ -87,6 +86,7 @@ func EnsureKBucketFile(path, selfName string) error {
 	return saveRTAtomic(path, rt)
 }
 
+// salva la mia routing table in maniera atomica sul file
 func saveRTAtomic(path string, rt *RoutingTableFile) error {
 	rt.SavedAt = time.Now().UTC().Format(time.RFC3339)
 	j, _ := json.MarshalIndent(rt, "", "  ")
@@ -94,7 +94,7 @@ func saveRTAtomic(path string, rt *RoutingTableFile) error {
 	if err := os.WriteFile(tmp, j, 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path) // rename è atomico su stessa FS
+	return os.Rename(tmp, path)
 }
 
 func countNonEmpty(m map[string][]PeerEntry) int {
@@ -107,6 +107,7 @@ func countNonEmpty(m map[string][]PeerEntry) int {
 	return n
 }
 
+// leggo la routing table
 func loadRT(path string) (*RoutingTableFile, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -125,17 +126,16 @@ func loadRT(path string) (*RoutingTableFile, error) {
 	return &rt, nil
 }
 
-// --- helpers locali ---
-
 func addrOf(name string) string {
 	// Semplice risoluzione "nodeX" -> "nodeX:8000"
-	// Se già è "host:port", va bene così.
+
 	if strings.Contains(name, ":") {
 		return name
 	}
 	return fmt.Sprintf("%s:%d", name, 8000)
 }
 
+// mantine una lista di nodi unici senza ripetizioni
 func uniqKeepOrder(ss []string) []string {
 	seen := make(map[string]struct{}, len(ss))
 	out := make([]string, 0, len(ss))
@@ -373,7 +373,7 @@ func JoinAndExpandLite(ctx context.Context, seederAddr, selfName string, alpha, 
 // snapshot degli SHA presenti in tutti i bucket del file strutturato
 func kbSnapSet(path string) map[string]struct{} {
 	set := make(map[string]struct{}, 128)
-	rt, err := loadRT(path) // <-- la tua loadRT del nuovo formato
+	rt, err := loadRT(path)
 	if err != nil || rt.Buckets == nil {
 		return set
 	}
@@ -424,7 +424,7 @@ func pingMany(ctx context.Context, selfName string, targets []string, maxInfligh
 				return
 			}
 
-			// ⬇️ QUI: aggiorna il TUO bucket con il peer che hai pingato con successo
+			// aggiorna il TUO bucket con il peer che hai pingato con successo
 			_ = TouchContactByName(tgt)
 
 			mu.Lock()

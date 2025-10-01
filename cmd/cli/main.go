@@ -57,11 +57,7 @@ func main() {
 
 		fmt.Println("Hai scelto il NFT:", line1)
 
-		//fmt.Printf("%x", key)
-
 		//------------------------Inizia la ricerca dell'NFT-------------------------------------------//
-		//node := "nodo3"
-		//name := "Lift-off Pass"
 
 		nodii, err := ui.ListActiveComposeServices("kademlia-nft")
 		if err != nil {
@@ -83,11 +79,7 @@ func main() {
 		} else {
 			fmt.Printf("✖ non trovato dopo %d round (α=3)\n", rounds)
 		}
-		/*
-			if err := ui.LookupNFTOnNodeByName(line, out, line1, 30); err != nil {
-				fmt.Println("Errore:", err)
-			}
-		*/
+
 	}
 	if choice == 3 {
 
