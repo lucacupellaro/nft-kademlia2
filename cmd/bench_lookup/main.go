@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
 	"errors"
 	"flag"
@@ -13,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,15 +24,16 @@ import (
 
 // ---------- CONFIG ----------
 const (
-	composeProject = "kademlia-nft"
-	defaultEnvPath = ".env"
-	defaultOutCSV  = "results/lookup.csv"
-	defaultSummary = "results/nRuns.csv"
-	waitReadyMax   = 40 * time.Second // attesa massima servizi dopo il rebuild
-	waitProbeEvery = 700 * time.Millisecond
-	csvNFT         = "csv/NFT_Top_Collections.csv"
-	outSummary     = "results/nodiPlus.csv"
-	maxHops        = 30
+	composeProject  = "kademlia-nft"
+	defaultEnvPath  = ".env"
+	defaultOutCSV   = "results/lookup.csv"
+	defaultSummary  = "results/nRuns.csv"
+	waitReadyMax    = 40 * time.Second // attesa massima servizi dopo il rebuild
+	waitProbeEvery  = 700 * time.Millisecond
+	csvNFT          = "csv/NFT_Top_Collections.csv"
+	outSummary      = "results/nodiPlus.csv"
+	maxHopsDefault  = 30
+	parallelTimeout = 2 * time.Second // timeout per singolo lookup parallelo
 )
 
 type Pair = ui.Pair
@@ -52,354 +53,360 @@ type RunStats struct {
 // ------------------------------------------------------------
 
 func main() {
-	a := 10
-	if a == 3 {
-		// carica i nomi NFT
-		names, err := readNames(csvNFT)
-		if err != nil {
-			log.Fatalf("Errore lettura CSV NFT: %v", err)
-		}
-		if len(names) == 0 {
-			log.Fatal("CSV NFT vuoto")
+	rand.Seed(time.Now().UnixNano())
+
+	// --- flags SOLO per file/percorsi (non influenzano la scelta del test) ---
+	csvPath := flag.String("csv", csvNFT, "Percorso del file CSV (colonna 'Name')")
+	envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
+	outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola run (overwrite)")
+	outSummaryPath := flag.String("outSummary", defaultSummary, "Output CSV riassunto (append)")
+	flag.Parse()
+
+	// --- 1) carica .env e parametri ---
+	env := readEnvFile(*envPath)
+	NEnv := firstInt(env["N"], 0)
+	kbEnv := firstInt(env["BUCKET_SIZE"], 0)
+	alphaEnv := firstInt(env["ALPHA"], 0)
+	replEnv := firstInt(env["REPLICATION_FACTOR"], 0)
+	maxHops := firstInt(env["LOOKUP_MAX_HOPS"], maxHopsDefault)
+	testID := firstInt(env["TEST"], 1) // <-- L'UNICA VARIABILE CHE SCEGLIE IL TEST
+
+	// validazioni base
+	if NEnv <= 0 || kbEnv <= 0 || alphaEnv <= 0 || replEnv <= 0 {
+		log.Fatalf("Parametri .env mancanti/invalidi (N=%d, K=%d, alpha=%d, repl=%d)", NEnv, kbEnv, alphaEnv, replEnv)
+	}
+
+	// --- 2) carica i nomi NFT (comune a tutti i test tranne loop ricostruzioni) ---
+	names, err := readNames(*csvPath)
+	if err != nil {
+		log.Fatalf("Errore lettura CSV NFT: %v", err)
+	}
+	if len(names) == 0 {
+		log.Fatal("CSV NFT vuoto (colonna 'Name').")
+	}
+
+	// --- 3) scopri nodi attivi e prepara reverse (comune ai test che NON fanno rebuild per-iterazione) ---
+	nodes, err := ui.ListActiveComposeServices(composeProject)
+	if err != nil {
+		log.Fatalf("Errore lista nodi: %v", err)
+	}
+	if len(nodes) == 0 {
+		log.Fatal("Nessun nodo attivo — avvia prima il cluster.")
+	}
+	// escludi il seeder se non partecipa come peer
+	nodes = filterOut(nodes, "node1")
+
+	// reverse per i test "statici"
+	reverse, err := ui.Reverse2(nodes)
+	if err != nil {
+		log.Fatalf("Errore Reverse2: %v", err)
+	}
+
+	// readiness
+	if err := waitClusterReady(nodes, waitReadyMax); err != nil {
+		log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
+	}
+
+	// --- 4) switch sui test, deciso da TEST nel .env ---
+	switch testID {
+
+	// TEST 1: sweep su N con rebuild, hop medio, ecc.
+	case 1:
+		runSweepOnN(names, kbEnv, alphaEnv)
+
+	// TEST 2: lookup concorrenti sullo STESSO NFT (nuova lookup α)
+	case 2:
+		nftName := names[0]
+		fmt.Printf("NFT scelto per il test concorrente: %s\n", nftName)
+		ConcurrentLookupTestAlpha(nodes, reverse, nftName, alphaEnv, maxHops)
+
+	// TEST 3: 5 lookup paralleli su 5 NFT diversi (nodi di partenza random)
+	case 3:
+		runFiveParallelLookups(nodes, reverse, names, alphaEnv, maxHops)
+
+	// DEFAULT: “static run” — cerca tutti gli NFT, log su CSV + summary append
+	default:
+		runStaticAllLookups(nodes, reverse, names, *outCSV, *outSummaryPath, NEnv, kbEnv, replEnv, alphaEnv, maxHops)
+	}
+}
+
+// ------------------------------------------------------------
+// TEST 1: sweep su N con rebuild e reseeding, K e alpha fissi
+// ------------------------------------------------------------
+func runSweepOnN(names []string, kbEnv, alphaEnv int) {
+	_ = os.MkdirAll("results", 0o755)
+	f, err := os.Create(outSummary) // overwrite ad ogni run del test
+	if err != nil {
+		log.Fatalf("Impossibile creare %s: %v", outSummary, err)
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	_ = w.Write([]string{
+		"iterazione", "numero_nodi", "kbucket", "alpha",
+		"nHops_medio", "stdHops", "maxHops", "NFT_trovati", "NFT_non_trovati",
+	})
+	w.Flush()
+
+	iter := 0
+	for N := 30; N <= 110; N += 20 {
+		iter++
+		fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d, α=%d ===\n", iter, N, kbEnv, alphaEnv)
+
+		// Aggiorna solo N nel .env
+		if err := setEnvVar(defaultEnvPath, "N", strconv.Itoa(N)); err != nil {
+			log.Fatalf("Errore set N: %v", err)
 		}
 
-		// nodi attivi + reverse
+		// Rigenera compose + rebuild cluster
+		if out, err := runCmd("bash", "generate-compose.sh"); err != nil {
+			log.Fatalf("generate-compose.sh fallito: %v\n%s", err, out)
+		}
+		_, _ = runCmd("bash", "-lc", "shopt -s dotglob nullglob; sudo rm -rf ./data/*")
+		if out, err := composeUpBuild(composeProject); err != nil {
+			log.Fatalf("docker compose up fallito: %v\n%s", err, out)
+		}
+
+		// Nodi dopo il rebuild
 		nodes, err := ui.ListActiveComposeServices(composeProject)
 		if err != nil {
 			log.Fatalf("Errore lista nodi: %v", err)
 		}
 		if len(nodes) == 0 {
-			log.Fatal("Nessun nodo attivo")
+			log.Fatal("Nessun nodo attivo dopo il rebuild")
 		}
+		nodes = filterOut(nodes, "node1")
+
 		reverse, err := ui.Reverse2(nodes)
 		if err != nil {
 			log.Fatalf("Errore Reverse2: %v", err)
 		}
-
-		// scegli un NFT qualunque da testare
-		nftName := names[0]
-		fmt.Printf("NFT scelto per il test concorrente: %s\n", nftName)
-
-		alpha := firstInt(os.Getenv("ALPHA"), 3)
-		if alpha <= 0 {
-			alpha = 3
-		}
-		ConcurrentLookupTestAlpha(nodes, reverse, nftName, alpha, maxHops)
-		return
-	}
-	if a == 1 { // test per variare N con alpha e k fissi e vedere l'andamento degli hop medi,
-		// ogni volta viene rebuildato tutto e gli NFT vengono re-seedati in modo da avere la rete bilanciata
-
-		// 0) leggi parametri fissi dal .env (una sola volta)
-		env := readEnvFile(defaultEnvPath)
-		kbEnv := firstInt(env["BUCKET_SIZE"], 4) // resta invariato per tutte le iterazioni
-		alphaEnv := firstInt(env["ALPHA"], 3)    // resta invariato per tutte le iterazioni
-		// replEnv := firstInt(env["REPLICATION_FACTOR"], 3) // se vuoi loggarlo
-
-		// 1) setup output
-		_ = os.MkdirAll("results", 0o755)
-		f, err := os.Create(outSummary) // overwrite ad ogni run del test
-		if err != nil {
-			log.Fatalf("Impossibile creare %s: %v", outSummary, err)
-		}
-		defer f.Close()
-		w := csv.NewWriter(f)
-		defer w.Flush()
-		_ = w.Write([]string{
-			"iterazione", "numero_nodi", "kbucket", "alpha",
-			"nHops_medio", "stdHops", "maxHops", "NFT_trovati", "NFT_non_trovati",
-		})
-		w.Flush()
-
-		// 2) carica gli NFT da cercare
-		names, err := readNames(csvNFT)
-		if err != nil {
-			log.Fatalf("Errore lettura CSV NFT: %v", err)
-		}
-		if len(names) == 0 {
-			log.Fatalf("Nel CSV %s non ho trovato la colonna 'Name' con valori.", csvNFT)
-		}
-
-		iter := 0
-		for N := 30; N <= 110; N += 20 {
-			iter++
-			fmt.Printf("\n=== Iterazione %d: N=%d, KB=%d, α=%d ===\n", iter, N, kbEnv, alphaEnv)
-
-			// 3) aggiorna SOLO N nel .env
-			if err := setEnvVar(defaultEnvPath, "N", strconv.Itoa(N)); err != nil {
-				log.Fatalf("Errore set N: %v", err)
-			}
-			// NON toccare BUCKET_SIZE / ALPHA qui: restano kbEnv/alphaEnv
-
-			// 4) rigenera compose e rebuild del cluster
-			if out, err := runCmd("bash", "generate-compose.sh"); err != nil {
-				log.Fatalf("generate-compose.sh fallito: %v\n%s", err, out)
-			}
-
-			// opzionale: azzera SOLO i dati locali (se usi bind-mount ./data -> /data)
-			_, _ = runCmd("bash", "-lc", "shopt -s dotglob nullglob; sudo rm -rf ./data/*")
-
-			// up (rebuild) per partire pulito
-			if out, err := composeUpBuild(composeProject); err != nil {
-				log.Fatalf("docker compose up fallito: %v\n%s", err, out)
-			}
-
-			// 5) scopri i nodi e crea la reverse map
-			nodes, err := ui.ListActiveComposeServices(composeProject)
-			if err != nil {
-				log.Fatalf("Errore lista nodi: %v", err)
-			}
-			if len(nodes) == 0 {
-				log.Fatal("Nessun nodo attivo dopo il rebuild")
-			}
-			reverse, err := ui.Reverse2(nodes)
-			if err != nil {
-				log.Fatalf("Errore Reverse2: %v", err)
-			}
-			// opzionale: escludi il seeder (se non partecipa come peer)
-			nodes = slices.DeleteFunc(nodes, func(s string) bool { return s == "node1" })
-
-			// 6) attesa readiness socket gRPC
-			if err := waitClusterReady(nodes, waitReadyMax); err != nil {
-				log.Printf("⚠️ Cluster forse non pronto: %v (procedo comunque)", err)
-			}
-
-			// (opzionale) piccolo respiro
-			time.Sleep(2 * time.Second)
-
-			// 7) esegui tutte le lookup
-			trovati, nonTrovati := 0, 0
-			hops := make([]int, 0, len(names))
-			for i, name := range names {
-				start := RandomNode(nodes)
-				h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alphaEnv, maxHops)
-				if err != nil || !found {
-					nonTrovati++
-					continue
-				}
-				trovati++
-				hops = append(hops, h)
-				fmt.Printf("[%d/%d] %s trovato in %d hop\n", i+1, len(names), name, h)
-			}
-
-			// 8) statistiche e salvataggio riga
-			mean, std := MeanStd(hops)
-			maxHop := 0
-			for _, v := range hops {
-				if v > maxHop {
-					maxHop = v
-				}
-			}
-
-			_ = w.Write([]string{
-				strconv.Itoa(iter),
-				strconv.Itoa(N),
-				strconv.Itoa(kbEnv),
-				strconv.Itoa(alphaEnv),
-				fmt.Sprintf("%.4f", mean),
-				fmt.Sprintf("%.4f", std),
-				strconv.Itoa(maxHop),
-				strconv.Itoa(trovati),
-				strconv.Itoa(nonTrovati),
-			})
-			w.Flush()
-
-			fmt.Printf(">>> Risultati: avgHops=%.3f, stdHops=%.3f (su %d lookup)\n", mean, std, len(hops))
-		}
-
-		fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
-	} else {
-
-		//test per cercare tutti gli nft
-		// test statico: cerca tutti gli NFT del dataset con configurazione presa dall'env, senza toccare .env e senza rebuild
-
-		// flags SOLO per file/percorsi
-		csvPath := flag.String("csv", "", "/percorso/collections.csv")
-		envPath := flag.String("env", defaultEnvPath, "Percorso del file .env")
-		outCSV := flag.String("out", defaultOutCSV, "Output CSV dettagli singola run (overwrite)")
-		outSummary := flag.String("outSummary", defaultSummary, "Output CSV riassunto (append)")
-		flag.Parse()
-
-		if *csvPath == "" {
-			log.Fatal("Devi specificare -csv /percorso/collections.csv (con colonna 'Name').")
-		}
-
-		// 1) carica parametri da .env
-		env := readEnvFile(*envPath)
-
-		// helper: prende un int dal map, con default
-		firstInt := func(s string, def int) int {
-			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && v != 0 {
-				return v
-			}
-			return def
-		}
-
-		N := firstInt(env["N"], 0)
-		bucketSize := firstInt(env["BUCKET_SIZE"], 0)
-		repl := firstInt(env["REPLICATION_FACTOR"], 3)
-		alpha := firstInt(env["ALPHA"], 3)              // <-- ora viene davvero dal .env
-		maxHops := firstInt(env["LOOKUP_MAX_HOPS"], 10) // o "MAX_HOPS", come preferisci
-
-		// validazioni minime (tutte da .env)
-		if N <= 0 {
-			log.Fatal("Nel .env manca N o è <= 0")
-		}
-		if bucketSize <= 0 {
-			log.Fatal("Nel .env manca BUCKET_SIZE o è <= 0")
-		}
-		if repl <= 0 {
-			log.Fatal("Nel .env manca REPLICATION_FACTOR o è <= 0")
-		}
-		if alpha <= 0 {
-			log.Fatal("Nel .env manca ALPHA o è <= 0")
-		}
-		// maxHops può avere un default ragionevole, quindi niente fatal
-
-		// 2) prepara cartella risultati
-		_ = os.MkdirAll("results", 0o755)
-
-		// 3) apri/crea summary (append, con header se nuovo)
-		summaryExists := fileExists(*outSummary)
-		sumF, err := os.OpenFile(*outSummary, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			log.Fatalf("Impossibile aprire %s: %v", *outSummary, err)
-		}
-		defer sumF.Close()
-		sumW := csv.NewWriter(sumF)
-		defer sumW.Flush()
-		if !summaryExists {
-			_ = sumW.Write([]string{
-				"iterazione", "NFT", "NFT NON TROVATI", "MEDIA HOP FATTI", "NFT TROVATI", "MAX HOPS",
-				"NODI", "BUCKETSIZE", "FATTORE DI REPLICAZIONI", "ALPHA",
-			})
-			sumW.Flush()
-		}
-
-		// 4) leggi i Name dal CSV
-		names, err := readNames(*csvPath)
-		if err != nil {
-			log.Fatalf("Errore lettura CSV input: %v", err)
-		}
-		if len(names) == 0 {
-			log.Fatalf("Nel CSV %s non ho trovato la colonna 'Name' con valori.", *csvPath)
-		}
-
-		// 5) scopri nodi attivi e reverse map (puoi tenerla, ma i parametri *restano* quelli del .env)
-		nodes, err := ui.ListActiveComposeServices(composeProject)
-		if err != nil {
-			log.Fatalf("Errore recupero nodi: %v", err)
-		}
-		if len(nodes) == 0 {
-			log.Fatal("Nessun nodo attivo trovato. Avvia prima il cluster.")
-		}
-		reverse, err := ui.Reverse2(nodes)
-		if err != nil {
-			log.Fatalf("Errore Reverse2: %v", err)
-		}
-		// opzionale: escludi node1 se è solo seeder
-		filtered := make([]string, 0, len(nodes))
-		for _, n := range nodes {
-			if n != "node1" {
-				filtered = append(filtered, n)
-			}
-		}
-		nodes = filtered
-
-		// 6) readiness
 		if err := waitClusterReady(nodes, waitReadyMax); err != nil {
-			log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
+			log.Printf("⚠️ Cluster forse non pronto: %v (procedo comunque)", err)
 		}
+		time.Sleep(2 * time.Second)
 
-		// 7) apri CSV dettagli (overwrite per questa run)
-		if err := os.MkdirAll(filepath.Dir(*outCSV), 0o755); err != nil {
-			log.Fatalf("Impossibile creare dir %s: %v", filepath.Dir(*outCSV), err)
-		}
-		outF, err := os.Create(*outCSV)
-		if err != nil {
-			log.Fatalf("Impossibile creare %s: %v", *outCSV, err)
-		}
-		defer outF.Close()
-		w := csv.NewWriter(outF)
-		defer w.Flush()
-		_ = w.Write([]string{"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha"})
-		w.Flush()
-
-		// 8) run unica
-		rand.Seed(time.Now().UnixNano())
-
+		// Lookup di tutte le chiavi
 		trovati, nonTrovati := 0, 0
 		hops := make([]int, 0, len(names))
-
 		for i, name := range names {
-			start := nodes[rand.Intn(len(nodes))]
-			fmt.Printf("[%d/%d] %s  (start=%s, α=%d)\n", i+1, len(names), name, start, alpha)
-
-			t0 := time.Now()
-			h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
-			elapsed := time.Since(t0).Milliseconds()
-
+			start := RandomNode(nodes)
+			h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alphaEnv, maxHopsDefault)
 			if err != nil || !found {
-				if err != nil {
-					fmt.Printf("  ✖ errore lookup: %v\n", err)
-				} else {
-					fmt.Println("  ✖ non trovato")
-				}
-				_ = w.Write([]string{
-					start, name, "-1",
-					strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
-					strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
-				})
-				w.Flush()
 				nonTrovati++
 				continue
 			}
-
-			fmt.Printf("  ✅ trovato in %d hop, %d ms\n", h, elapsed)
-			_ = w.Write([]string{
-				start, name, strconv.Itoa(h),
-				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
-				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
-			})
-			w.Flush()
 			trovati++
 			hops = append(hops, h)
+			fmt.Printf("[%d/%d] %s trovato in %d hop\n", i+1, len(names), name, h)
 		}
 
-		// 9) statistiche e summary
 		mean, std := MeanStd(hops)
-		fmt.Printf("  📊 statistiche: media_hop=%.3f, std_hop=%.3f\n", mean, std)
-		maxHop := 0
-		for _, v := range hops {
-			if v > maxHop {
-				maxHop = v
-			}
-		}
-		iter := 1
-
-		_ = sumW.Write([]string{
+		maxHop := maxIntSlice(hops)
+		_ = w.Write([]string{
 			strconv.Itoa(iter),
-			strconv.Itoa(len(names)),
-			strconv.Itoa(nonTrovati),
-			fmt.Sprintf("%.6f", mean),
-			strconv.Itoa(trovati),
-			strconv.Itoa(maxHop),
 			strconv.Itoa(N),
-			strconv.Itoa(bucketSize),
-			strconv.Itoa(repl),
-			strconv.Itoa(alpha),
+			strconv.Itoa(kbEnv),
+			strconv.Itoa(alphaEnv),
+			fmt.Sprintf("%.4f", mean),
+			fmt.Sprintf("%.4f", std),
+			strconv.Itoa(maxHop),
+			strconv.Itoa(trovati),
+			strconv.Itoa(nonTrovati),
 		})
-		sumW.Flush()
+		w.Flush()
 
-		fmt.Printf("✅ Run statica completata — trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d (N=%d, K=%d, repl=%d, α=%d)\n",
-			trovati, nonTrovati, mean, maxHop, N, bucketSize, repl, alpha)
+		fmt.Printf(">>> Risultati: avgHops=%.3f, stdHops=%.3f (su %d lookup)\n", mean, std, len(hops))
+	}
 
+	fmt.Printf("\n🏁 Test completato. Risultati in %s\n", outSummary)
+}
+
+// ------------------------------------------------------------
+// TEST 10: 5 lookup paralleli su 5 NFT diversi
+// ------------------------------------------------------------
+func runFiveParallelLookups(nodes []string, reverse []Pair, names []string, alphaEnv, maxHops int) {
+	if len(names) < 5 {
+		log.Fatalf("Servono almeno 5 NFT nel CSV (trovati: %d)", len(names))
+	}
+
+	// prendi i primi 5 (oppure usa un campionamento casuale se preferisci)
+	selected := make([]string, 5)
+	copy(selected, names[:5])
+
+	type res struct {
+		name    string
+		start   string
+		found   bool
+		hops    int
+		latency time.Duration
+		err     error
+	}
+
+	results := make(chan res, 5)
+	var wg sync.WaitGroup
+	wg.Add(5)
+
+	for _, nm := range selected {
+		start := RandomNode(nodes)
+		go func(nm, startNode string) {
+			defer wg.Done()
+
+			// timeout “guardia” per singolo lookup
+			ctx, cancel := context.WithTimeout(context.Background(), parallelTimeout)
+			defer cancel()
+
+			t0 := time.Now()
+			// Se hai una versione con ctx: ui.LookupNFTOnNodeByNameAlphaCtx(ctx, ...)
+			_ = ctx // non usato dalla tua API attuale, ma lo teniamo come struttura
+			h, found, err := ui.LookupNFTOnNodeByNameAlpha(startNode, reverse, nm, alphaEnv, maxHops)
+			lat := time.Since(t0)
+
+			results <- res{name: nm, start: startNode, found: found, hops: h, latency: lat, err: err}
+		}(nm, start)
+	}
+
+	wg.Wait()
+	close(results)
+
+	foundCnt, maxHop := 0, 0
+	var sumHop int
+	var sumLat time.Duration
+
+	for r := range results {
+		if r.err != nil {
+			fmt.Printf("✖ %q (start=%s): err=%v\n", r.name, r.start, r.err)
+			continue
+		}
+		if !r.found {
+			fmt.Printf("✖ %q (start=%s): non trovato\n", r.name, r.start)
+			continue
+		}
+		fmt.Printf("✅ %q (start=%s): hops=%d, lat=%s\n", r.name, r.start, r.hops, r.latency)
+		foundCnt++
+		if r.hops > maxHop {
+			maxHop = r.hops
+		}
+		sumHop += r.hops
+		sumLat += r.latency
+	}
+
+	if foundCnt > 0 {
+		avgHop := float64(sumHop) / float64(foundCnt)
+		avgLat := time.Duration(int64(sumLat) / int64(foundCnt))
+		fmt.Printf("RIEPILOGO: trovati=%d/5 avgHop=%.3f maxHop=%d avgLatency=%s\n", foundCnt, avgHop, maxHop, avgLat)
+	} else {
+		fmt.Println("RIEPILOGO: nessun NFT trovato")
 	}
 }
 
 // ------------------------------------------------------------
+// DEFAULT: run “statica” — cerca TUTTI gli NFT e scrive CSV + summary
+// ------------------------------------------------------------
+func runStaticAllLookups(
+	nodes []string,
+	reverse []Pair,
+	names []string,
+	outCSV string,
+	outSummary string,
+	N, bucketSize, repl, alpha int,
+	maxHops int,
+) {
+	_ = os.MkdirAll(filepath.Dir(outCSV), 0o755)
 
-// ---------- Test concorrente basato su nuova lookup α ----------
+	// CSV dettagli (overwrite)
+	outF, err := os.Create(outCSV)
+	if err != nil {
+		log.Fatalf("Impossibile creare %s: %v", outCSV, err)
+	}
+	defer outF.Close()
+	w := csv.NewWriter(outF)
+	defer w.Flush()
+	_ = w.Write([]string{"nodePartenza", "NameNft", "Hop", "NumeroNodi", "repliche", "KsizeBucket", "time_ms", "alpha"})
+	w.Flush()
+
+	// Summary (append, header se nuovo)
+	sumExists := fileExists(outSummary)
+	sumF, err := os.OpenFile(outSummary, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Fatalf("Impossibile aprire %s: %v", outSummary, err)
+	}
+	defer sumF.Close()
+	sumW := csv.NewWriter(sumF)
+	defer sumW.Flush()
+	if !sumExists {
+		_ = sumW.Write([]string{
+			"iterazione", "NFT", "NFT NON TROVATI", "MEDIA HOP FATTI", "NFT TROVATI", "MAX HOPS",
+			"NODI", "BUCKETSIZE", "FATTORE DI REPLICAZIONI", "ALPHA",
+		})
+		sumW.Flush()
+	}
+
+	// Esecuzione
+	trovati, nonTrovati := 0, 0
+	hops := make([]int, 0, len(names))
+
+	for i, name := range names {
+		start := RandomNode(nodes)
+		fmt.Printf("[%d/%d] %s  (start=%s, α=%d)\n", i+1, len(names), name, start, alpha)
+
+		t0 := time.Now()
+		h, found, err := ui.LookupNFTOnNodeByNameAlpha(start, reverse, name, alpha, maxHops)
+		elapsed := time.Since(t0).Milliseconds()
+
+		if err != nil || !found {
+			if err != nil {
+				fmt.Printf("  ✖ errore lookup: %v\n", err)
+			} else {
+				fmt.Println("  ✖ non trovato")
+			}
+			_ = w.Write([]string{
+				start, name, "-1",
+				strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+				strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+			})
+			w.Flush()
+			nonTrovati++
+			continue
+		}
+
+		fmt.Printf("  ✅ trovato in %d hop, %d ms\n", h, elapsed)
+		_ = w.Write([]string{
+			start, name, strconv.Itoa(h),
+			strconv.Itoa(N), strconv.Itoa(repl), strconv.Itoa(bucketSize),
+			strconv.FormatInt(elapsed, 10), strconv.Itoa(alpha),
+		})
+		w.Flush()
+		trovati++
+		hops = append(hops, h)
+	}
+
+	mean, std := MeanStd(hops)
+	fmt.Printf("%.6f\n", std)
+	maxHop := maxIntSlice(hops)
+	iter := 1
+
+	_ = sumW.Write([]string{
+		strconv.Itoa(iter),
+		strconv.Itoa(len(names)),
+		strconv.Itoa(nonTrovati),
+		fmt.Sprintf("%.6f", mean),
+		strconv.Itoa(trovati),
+		strconv.Itoa(maxHop),
+		strconv.Itoa(N),
+		strconv.Itoa(bucketSize),
+		strconv.Itoa(repl),
+		strconv.Itoa(alpha),
+	})
+	sumW.Flush()
+
+	fmt.Printf("✅ Run statica completata — trovati=%d, non_trovati=%d, avg_hops=%.3f, max_hops=%d (N=%d, K=%d, repl=%d, α=%d)\n",
+		trovati, nonTrovati, mean, maxHop, N, bucketSize, repl, alpha)
+}
+
+// ------------------------------------------------------------
+// Test concorrente basato su nuova lookup α (stesso NFT)
+// ------------------------------------------------------------
 func ConcurrentLookupTestAlpha(nodes []string, reverse []Pair, nftName string, alpha int, maxRounds int) {
 	if len(nodes) == 0 {
 		fmt.Println("Nessun nodo attivo")
@@ -430,7 +437,10 @@ func ConcurrentLookupTestAlpha(nodes []string, reverse []Pair, nftName string, a
 	wg.Wait()
 }
 
-// ---------- Lettura nomi dal CSV (colonna Name) ----------
+// ------------------------------------------------------------
+// Helpers “generici” (riusati da tutti i test)
+// ------------------------------------------------------------
+
 func readNames(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -473,7 +483,6 @@ func readNames(path string) ([]string, error) {
 	return names, nil
 }
 
-// ---------- .env parsing / update ----------
 func readEnvFile(path string) map[string]string {
 	out := map[string]string{}
 	f, err := os.Open(path)
@@ -502,7 +511,6 @@ func setEnvVar(path, key, val string) error {
 	lines := []string{}
 	exists := false
 
-	// se il file non esiste, lo creo
 	fin, _ := os.Open(path)
 	if fin != nil {
 		sc := bufio.NewScanner(fin)
@@ -550,7 +558,7 @@ func firstInt(s string, def int) int {
 	if s == "" {
 		return def
 	}
-	if n, err := strconv.Atoi(s); err == nil {
+	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n != 0 {
 		return n
 	}
 	return def
@@ -561,15 +569,11 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// ---------- Docker helpers ----------
-
 func composeUpBuild(project string) (string, error) {
-	// prova "docker compose"; se non esiste, fallback a "docker-compose"
 	out, err := runCmd("docker", "compose", "-p", project, "up", "-d", "--build", "--force-recreate")
 	if err == nil {
 		return out, nil
 	}
-	// fallback
 	return runCmd("docker-compose", "-p", project, "up", "-d", "--build", "--force-recreate")
 }
 
@@ -580,12 +584,10 @@ func runCmd(name string, args ...string) (string, error) {
 	return string(b), err
 }
 
-// attende che TUTTI i nodi espongano la porta gRPC (risolta via ui.ResolveStartHostPort)
 func waitClusterReady(nodes []string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	pending := map[string]string{} // node -> hostPort
 
-	// resolve subito
 	for _, n := range nodes {
 		if hp, err := ui.ResolveStartHostPort(n); err == nil && hp != "" {
 			pending[n] = hp
@@ -628,78 +630,31 @@ func minInt(a, b int) int {
 	return b
 }
 
-// --- GATE: aspetta che il dataset sia effettivamente presente sui nodi ---
-// Esegue 'probes' lookup random e richiede almeno 'minHits' successi.
-// Ripete la prova 'retries' volte, con 'pause' tra i tentativi.
-// Ritorna nil se pronto, altrimenti errore.
-func waitDatasetPopulated(
-	nodes []string,
-	reverse []Pair,
-	names []string,
-	alpha, maxHops int,
-	probes, minHits, retries int,
-	pause time.Duration,
-) error {
-	if len(nodes) == 0 {
-		return fmt.Errorf("nessun nodo")
-	}
-	if len(names) == 0 {
-		return fmt.Errorf("lista NFT vuota")
-	}
-	if probes <= 0 {
-		probes = 8
-	}
-	if minHits <= 0 || minHits > probes {
-		minHits = max(1, probes/5) // ~20%
-	}
-	if retries < 0 {
-		retries = 0
-	}
-
-	rand.Seed(time.Now().UnixNano())
-
-	try := func() int {
-		hits := 0
-		for i := 0; i < probes; i++ {
-			nft := names[rand.Intn(len(names))]
-			start := nodes[rand.Intn(len(nodes))]
-			if hops, found, _ := ui.LookupNFTOnNodeByNameAlpha(start, reverse, nft, alpha, maxHops); found && hops > 0 {
-				hits++
-			}
-		}
-		return hits
-	}
-
-	for attempt := 1; attempt <= retries+1; attempt++ {
-		hits := try()
-		if hits >= minHits {
-			return nil
-		}
-		if attempt <= retries {
-			time.Sleep(pause)
+func maxIntSlice(xs []int) int {
+	m := 0
+	for _, v := range xs {
+		if v > m {
+			m = v
 		}
 	}
-	return fmt.Errorf("dataset non pronto: probe < %d hit su %d", minHits, probes)
+	return m
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
+func filterOut(xs []string, bad string) []string {
+	out := make([]string, 0, len(xs))
+	for _, v := range xs {
+		if !strings.EqualFold(strings.TrimSpace(v), bad) {
+			out = append(out, v)
+		}
 	}
-	return b
+	return out
 }
 
 func RandomNode(nodes []string) string {
-	choices := []string{}
-	for _, n := range nodes {
-		if !strings.EqualFold(strings.TrimSpace(n), "node1") {
-			choices = append(choices, n)
-		}
+	if len(nodes) == 0 {
+		return ""
 	}
-	if len(choices) == 0 {
-		return nodes[0]
-	}
-	return choices[rand.Intn(len(choices))]
+	return nodes[rand.Intn(len(nodes))]
 }
 
 func MeanStd(data []int) (float64, float64) {

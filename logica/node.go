@@ -80,6 +80,7 @@ func TouchContactByName(contactName string) error {
 	peerSHA := common.Sha1ID(contactName)
 	peerSHAHex := strings.ToLower(hex.EncodeToString(peerSHA))
 
+	//mi trovo l'indice globale del bucket esempio 120
 	idx, err := common.MSBIndex(selfSHA, peerSHA)
 	if err != nil || idx < 0 || idx >= rt.HashBits {
 		return nil
@@ -105,10 +106,11 @@ func TouchContactByName(contactName string) error {
 	} else {
 		b = append(b, entry)
 	}
+	//vado nel bucket corretto
 	rt.Buckets[key] = b
 
-	// ✅ nome campo corretto nella struct
 	rt.NonEmptyInfo = countNonEmpty(rt.Buckets)
 
+	//salva tutto sul file
 	return saveRTAtomic(kBucketPath, rt)
 }

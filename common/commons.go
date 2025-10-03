@@ -36,7 +36,8 @@ func XorDist(a20 []byte, b20 []byte) *big.Int {
 	return new(big.Int).SetBytes(nb)
 }
 
-// MSBIndex calcola l'indice del bit più significativo a 1 della distanza d (Xor tra a e b)
+// attenzione la notazione è in BIg Endian in quanto la funzione sha1.Sum() ritorna in big endian
+// MSBIndex mi calcala l'indce globale del buket (andano a prendere il primo byte piu significativo)
 func MSBIndex(a, b []byte) (int, error) {
 	d, err := XOR(a, b)
 	if err != nil {
@@ -47,11 +48,13 @@ func MSBIndex(a, b []byte) (int, error) {
 		return -1, fmt.Errorf("empty input")
 	}
 
+	//serve a trovare l’indice del byte più significativo
 	for i := 0; i < n; i++ {
 		if d[i] != 0 {
 
 			posInByte := bits.Len8(d[i]) - 1
 
+			//trasformo in indice globale
 			return (n-1-i)*8 + posInByte, nil
 		}
 	}
