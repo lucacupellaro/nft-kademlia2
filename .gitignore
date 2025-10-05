@@ -5,7 +5,6 @@ node_modules/
 vendor/
 bin/
 coverage/
-.env
 dist/
 build/
 
