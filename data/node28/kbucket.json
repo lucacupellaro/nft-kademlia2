@@ -1,0 +1,103 @@
+{
+  "self_node": "node28",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-10-09T12:09:12Z",
+  "buckets": {
+    "153": [
+      {
+        "name": "node78",
+        "sha": "1090baa656956145ec6f952f410ebcdb41aa72a0",
+        "dist": ""
+      }
+    ],
+    "154": [
+      {
+        "name": "node93",
+        "sha": "1554a6e5606e9f993065ecf0a9dd88f55b706cc5",
+        "dist": ""
+      }
+    ],
+    "155": [
+      {
+        "name": "node72",
+        "sha": "1d310b103b35834cda05d619fea4b1e148f3aeb4",
+        "dist": ""
+      },
+      {
+        "name": "node68",
+        "sha": "18be83616833f905eedfcc4c393dc6013059edb0",
+        "dist": ""
+      },
+      {
+        "name": "node95",
+        "sha": "194728d731dd6f7c84d6ba0e168afe45b479cefe",
+        "dist": ""
+      }
+    ],
+    "156": [
+      {
+        "name": "node20",
+        "sha": "0b37a0395c4840fa2c09cd3eb46850b2073046a5",
+        "dist": ""
+      },
+      {
+        "name": "node101",
+        "sha": "0334f6e96bdfb421066281d38c9dc200d7af8528",
+        "dist": ""
+      },
+      {
+        "name": "node26",
+        "sha": "078e39f14be101ead3b878eb091370d2c8cc2bd7",
+        "dist": ""
+      }
+    ],
+    "157": [
+      {
+        "name": "node42",
+        "sha": "2c5fcb0228c77708f41748276a920dafe57f974d",
+        "dist": ""
+      },
+      {
+        "name": "node37",
+        "sha": "378c97edb03cf6d2fb992c4efb1ac740f336ac2c",
+        "dist": ""
+      }
+    ],
+    "158": [
+      {
+        "name": "node22",
+        "sha": "7c729e3965ea85624b84fd12815e55e2f0f1c03d",
+        "dist": ""
+      },
+      {
+        "name": "node100",
+        "sha": "6a5e4df5c67de309e44834ec41c393f75354290b",
+        "dist": ""
+      },
+      {
+        "name": "node59",
+        "sha": "621bf2426999ff8019ff2d035564fcdde6789b82",
+        "dist": ""
+      }
+    ],
+    "159": [
+      {
+        "name": "node53",
+        "sha": "85a1ec43433f5850c5463df2b815c189b91e44b7",
+        "dist": ""
+      },
+      {
+        "name": "node54",
+        "sha": "af2ce27b0603df025c0fd58e852e5808d5622320",
+        "dist": ""
+      },
+      {
+        "name": "node92",
+        "sha": "8e6051499608dd60f95039ec78bdb45d8f3d3d0b",
+        "dist": ""
+      }
+    ]
+  },
+  "non_empty_buckets": 7
+}

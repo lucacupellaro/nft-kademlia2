@@ -1,0 +1,91 @@
+{
+  "self_node": "node53",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-10-09T12:09:12Z",
+  "buckets": {
+    "154": [
+      {
+        "name": "node103",
+        "sha": "813bc12e979e7116a232922bc5542ed9ebfe7e7e",
+        "dist": ""
+      }
+    ],
+    "155": [
+      {
+        "name": "node92",
+        "sha": "8e6051499608dd60f95039ec78bdb45d8f3d3d0b",
+        "dist": ""
+      }
+    ],
+    "156": [
+      {
+        "name": "node99",
+        "sha": "959e58d0970bef41ea72dd25fda74baa4dd058ba",
+        "dist": ""
+      },
+      {
+        "name": "node4",
+        "sha": "9da30539af3639c600c6256f7691750a581c36c2",
+        "dist": ""
+      },
+      {
+        "name": "node105",
+        "sha": "9d5b9af357fff9ff81e8ec30675ed818104f5d9d",
+        "dist": ""
+      }
+    ],
+    "157": [
+      {
+        "name": "node39",
+        "sha": "b300ae97df9f5b950d9f63f4c425c18494c6832c",
+        "dist": ""
+      },
+      {
+        "name": "node3",
+        "sha": "a46fe0c4dab0453f5d86bed6206040880f59393e",
+        "dist": ""
+      },
+      {
+        "name": "node54",
+        "sha": "af2ce27b0603df025c0fd58e852e5808d5622320",
+        "dist": ""
+      }
+    ],
+    "158": [
+      {
+        "name": "node85",
+        "sha": "df825f11b2e7732f0ff560c3319f10a36da65137",
+        "dist": ""
+      },
+      {
+        "name": "node7",
+        "sha": "c03e55d15602a33922858e97664ea33f368ef5de",
+        "dist": ""
+      },
+      {
+        "name": "node48",
+        "sha": "e4d172651d59a5b88ba1b63de40a7b00e769ef2e",
+        "dist": ""
+      }
+    ],
+    "159": [
+      {
+        "name": "node58",
+        "sha": "5a6445dfe118de43241d4fca11a325ce2eba9180",
+        "dist": ""
+      },
+      {
+        "name": "node21",
+        "sha": "671b2757a89f0fb1a5432e1bc91b6b42e531d68d",
+        "dist": ""
+      },
+      {
+        "name": "node95",
+        "sha": "194728d731dd6f7c84d6ba0e168afe45b479cefe",
+        "dist": ""
+      }
+    ]
+  },
+  "non_empty_buckets": 6
+}

@@ -12,3 +12,8 @@ Istruzioni per buildare la rete e popolare le risorse:
    - impostare la variabile TEST nel file .env
    - avviare il benchmark:
      go run cmd/bench_lookup/main.go
+
+Attenzione:
+1. Nel file csv lookup.csv ci sono salvati le mteriche di una singola run di ricerca
+2. In nodiPlus.cvs le metriche relative alla ricerca al variare dei nodi nella rete
+3. In nRuns.csv le metrihe relative a una sola ricerca su paremtri statici

@@ -96,13 +96,11 @@ func main() {
 	// escludi il seeder se non partecipa come peer
 	nodes = filterOut(nodes, "node1")
 
-	// reverse per i test "statici"
 	reverse, err := ui.Reverse2(nodes)
 	if err != nil {
 		log.Fatalf("Errore Reverse2: %v", err)
 	}
 
-	// readiness
 	if err := waitClusterReady(nodes, waitReadyMax); err != nil {
 		log.Printf("⚠️ cluster forse non ancora pronto: %v (procedo comunque)", err)
 	}
@@ -110,7 +108,7 @@ func main() {
 	// --- 4) switch sui test, deciso da TEST nel .env ---
 	switch testID {
 
-	// TEST 1: sweep su N con rebuild, hop medio, ecc.
+	// TEST 1: facendo variare N con rebuild e lookup per ogni run hop medio, ecc.
 	case 1:
 		runSweepOnN(names, kbEnv, alphaEnv)
 

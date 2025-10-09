@@ -1,0 +1,60 @@
+{
+  "self_node": "node42",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-10-09T12:09:12Z",
+  "buckets": {
+    "157": [
+      {
+        "name": "node28",
+        "sha": "1207716b0643115ee89297bb533427d4deb94690",
+        "dist": ""
+      },
+      {
+        "name": "node68",
+        "sha": "18be83616833f905eedfcc4c393dc6013059edb0",
+        "dist": ""
+      },
+      {
+        "name": "node78",
+        "sha": "1090baa656956145ec6f952f410ebcdb41aa72a0",
+        "dist": ""
+      }
+    ],
+    "158": [
+      {
+        "name": "node110",
+        "sha": "73f78d82f187c165e771b9b0313d18068b7bdbf9",
+        "dist": ""
+      },
+      {
+        "name": "node10",
+        "sha": "4e15dc72a6c09157df7aa886c76c4d0af1ac72c6",
+        "dist": ""
+      },
+      {
+        "name": "node22",
+        "sha": "7c729e3965ea85624b84fd12815e55e2f0f1c03d",
+        "dist": ""
+      }
+    ],
+    "159": [
+      {
+        "name": "node81",
+        "sha": "df0aa95edf11063096259214cb50bf41c6334b3a",
+        "dist": ""
+      },
+      {
+        "name": "node85",
+        "sha": "df825f11b2e7732f0ff560c3319f10a36da65137",
+        "dist": ""
+      },
+      {
+        "name": "node49",
+        "sha": "dfdf05e013f8237aa50f9df2f533dff69e60162f",
+        "dist": ""
+      }
+    ]
+  },
+  "non_empty_buckets": 3
+}

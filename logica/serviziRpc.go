@@ -115,7 +115,7 @@ func (s *KademliaServer) LookupNFT(ctx context.Context, req *pb.LookupNFTReq) (*
 		}
 	}
 
-	// 2) Non trovato: leggi routing table NUOVA
+	// 2) Non trovato: leggi routing table
 	kbPath := filepath.Join(dataDir, "kbucket.json")
 	s.kbMu.RLock()
 	kbBytes, err := os.ReadFile(kbPath)

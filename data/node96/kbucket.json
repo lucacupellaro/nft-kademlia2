@@ -1,0 +1,8 @@
+{
+  "self_node": "node96",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-10-09T12:09:12Z",
+  "buckets": {},
+  "non_empty_buckets": 0
+}

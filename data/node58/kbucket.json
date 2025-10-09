@@ -1,0 +1,86 @@
+{
+  "self_node": "node58",
+  "bucket_size": 3,
+  "hash_bits": 160,
+  "saved_at": "2025-10-09T12:09:12Z",
+  "buckets": {
+    "150": [
+      {
+        "name": "node51",
+        "sha": "5a1420ee2549681a88b4b208f59e35eb09e22fa3",
+        "dist": ""
+      }
+    ],
+    "153": [
+      {
+        "name": "node63",
+        "sha": "5987c726b52b4bd0e8802999381a1d7ed80ad4bd",
+        "dist": ""
+      }
+    ],
+    "155": [
+      {
+        "name": "node57",
+        "sha": "530d84101e1e2004a2e2aa23c55dd814d386ca18",
+        "dist": ""
+      },
+      {
+        "name": "node67",
+        "sha": "51addf7d5bb050b62150fd5149dbc06033ab7a26",
+        "dist": ""
+      }
+    ],
+    "157": [
+      {
+        "name": "node86",
+        "sha": "7f7d676b0bde6b24f3d9bf62a369810cad892263",
+        "dist": ""
+      },
+      {
+        "name": "node6",
+        "sha": "74e5a4bcab7355b8cab7df73d07747cd85c925e7",
+        "dist": ""
+      },
+      {
+        "name": "node21",
+        "sha": "671b2757a89f0fb1a5432e1bc91b6b42e531d68d",
+        "dist": ""
+      }
+    ],
+    "158": [
+      {
+        "name": "node78",
+        "sha": "1090baa656956145ec6f952f410ebcdb41aa72a0",
+        "dist": ""
+      },
+      {
+        "name": "node88",
+        "sha": "0bfdae963645dc4b23f326760423f70d102eb75c",
+        "dist": ""
+      },
+      {
+        "name": "node35",
+        "sha": "0b4147cdcf8d83d0c1564034243d98d21970ca79",
+        "dist": ""
+      }
+    ],
+    "159": [
+      {
+        "name": "node97",
+        "sha": "ceeb9b765eb8d44511491b43d347b82649b3379a",
+        "dist": ""
+      },
+      {
+        "name": "node82",
+        "sha": "f53360e1aa2a053fa5e2d29220dfa76ff851e76b",
+        "dist": ""
+      },
+      {
+        "name": "node49",
+        "sha": "dfdf05e013f8237aa50f9df2f533dff69e60162f",
+        "dist": ""
+      }
+    ]
+  },
+  "non_empty_buckets": 6
+}

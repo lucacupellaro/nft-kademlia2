@@ -23,10 +23,10 @@ import (
 )
 
 var (
-	rtMu sync.Mutex // <-- nome corretto
+	rtMu sync.Mutex 
 )
 
-// struttura per il salvataggio
+
 type KBucketFile struct {
 	NodeID    string   `json:"node_id"`
 	BucketHex []string `json:"bucket_hex"`

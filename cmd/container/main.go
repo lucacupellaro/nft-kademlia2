@@ -88,7 +88,7 @@ func main() {
 		}
 		fmt.Printf("✅ File salvato in: %s\n", out)
 
-		// per ogni nft , creo unafunzione che per ogni nft scorre tutti e gli id dei nodi e li assegna ai 2 piu vicini)
+		// Per ogni nft scorre tutti e gli id dei nodi e li assegna ai repFactor piu vicini)
 
 		fmt.Println("Assegnazione dei k nodeID più vicini agli NFT...")
 
@@ -116,7 +116,6 @@ func main() {
 			for i := 0; i < repFactor; i++ {
 				nodiSelected = append(nodiSelected, assigned[i].Key)
 			}
-			//nodiSelected = append(nodiSelected, assigned[0].Key, assigned[1].Key)
 
 			nfts = append(nfts, logica.NFT{
 				Index:             col(0),
@@ -191,7 +190,7 @@ func main() {
 			bucketSize = 5
 		}
 
-		// ------------------- Costruzione routing table con capienza bucket K e salvataggio -------------------
+		// ------------------- Costruzione routing table con capienza bucketSize e salvataggio -------------------
 
 		kbPath := filepath.Join(dataDir, "kbucket.json")
 		logica.SetKBucketGlobals(kbPath, bucketSize)
@@ -204,6 +203,8 @@ func main() {
 		alpha := logica.RequireIntEnv("ALPHA", 3)
 		seedSample := logica.RequireIntEnv("SEEDSAMPLE", 10)
 		iters := logica.RequireIntEnv("JOIN_ITERS", 3)
+
+		//------------------Faccio durare JoinAndExpandLite al massimo 20 sec---------------------
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
